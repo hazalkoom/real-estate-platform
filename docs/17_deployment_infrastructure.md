@@ -56,37 +56,50 @@ Persistent development data:
 
 Only services that need host access are exposed to the host. PostgreSQL, Redis and Qdrant are not publicly exposed.
 
-## 3. Production/public deployment constraint
+## 3. Production & Demo Environment Strategy
 
-Because no payment card is available, we will **not depend on a paid VPS or cloud account**.
+Because no credit/debit card is used, the system enforces a strict dual-target strategy:
 
-A complete production-like stack will remain runnable locally with Docker Compose.
+### Target A: Canonical Local Full-Stack Environment (Docker Compose)
+This is the primary, 100% complete reference environment for full feature development, demonstrations, and portfolio evaluation:
+- Full Django ASGI + Strawberry GraphQL + Django Channels
+- PostgreSQL with persistent Docker volume
+- Redis (cache, Celery broker, channels backplane, rate limiting)
+- Celery worker (async tasks, email, media processing)
+- Qdrant vector database (embeddings, semantic search)
+- Local media storage with live preview
 
-For a public demo, use a genuinely free/no-card platform where its current limits fit the application. **Render Free** is the initial candidate because it currently supports free Python web services, static sites and a free Postgres option without requiring payment information. Its free web services sleep after inactivity, and its free Postgres database expires after 30 days, so it is suitable for a demo/preview rather than permanent production. citeturn0search1turn0search14
+Running `docker compose up` starts the complete multi-service architecture locally without requiring any cloud accounts or payment methods.
 
-Do not design the application around temporary free-tier limitations. The Docker deployment remains the canonical environment.
+### Target B: Public Zero-Cost Cloud Demo
+For a live web-accessible portfolio demonstration without credit cards:
+- **Web Frontend (Vite SPA):** Hosted for free on **Vercel**, **Netlify**, or **GitHub Pages** (no card required, high speed global CDN).
+- **Backend API (Django ASGI):** Hosted on **Render Free** (Python web service) or **Koyeb Free** (supports Docker containers).
+- **PostgreSQL Database:** Free tier on **Supabase** (500MB storage, persistent, no expiration, no card required) or **Neon.tech** (free serverless Postgres).
+- **Redis (Cache & Celery Broker):** Free tier on **Upstash Redis** (10,000 commands/day, no card required).
+- **Media Object Storage:** Free tier on **Cloudflare R2** (10GB free, S3-compatible, no card required for initial allowances) or Supabase Storage.
+- **Graceful Cloud Degradation:** If background Celery or Qdrant are constrained in the free cloud instance, the application operates in sync/fallback mode while remaining 100% functional for core browsing, viewings, favorites, and chat.
 
-## 4. Public demo architecture
+---
 
-Start with the smallest viable public deployment:
+## 4. Public Demo Architecture
 
 ```text
-GitHub
-  ↓
-Free hosting
-  ↓
-Django / API
-  ↓
-Free database/service where available
+       Browser / Mobile
+              │
+              ├── Web Assets ──► Vercel / Netlify CDN (Free)
+              │
+              └── GraphQL / WS ─► Render / Koyeb Web Service (Free)
+                                         │
+                 ┌───────────────────────┼───────────────────────┐
+                 ▼                       ▼                       ▼
+          Supabase Postgres        Upstash Redis         Cloudflare R2
+          (Authoritative DB)     (Cache & Channels)     (Media Storage)
 ```
 
-If a required dependency (Redis, Celery worker, Qdrant, persistent object storage, etc.) cannot be hosted free/no-card on the selected platform, keep that component local rather than introducing a paid dependency.
+AI and heavy async jobs degrade gracefully when cloud worker resources sleep, ensuring the live demo never crashes.
 
-AI features must degrade gracefully when an external AI provider is unavailable.
-
-## 5. Container registry
-
-Use **GitHub Container Registry (GHCR)** for public project images where useful.
+---
 
 - GitHub Actions builds the image.
 - Trivy scans it.

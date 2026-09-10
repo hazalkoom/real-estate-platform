@@ -18,24 +18,35 @@ The goal is not to add databases everywhere. Each storage technology must have a
 
 PostgreSQL stores the authoritative application data:
 
-- users
-- properties
-- listings
-- locations
-- amenities
-- favorites
-- viewings
-- messages
-- notifications
-- AI interaction metadata
-- other relational application data
+- `users` (managed by Django `AbstractBaseUser`, email as username, password hashing)
+- `properties` (core property specifications)
+- `property_types` (apartments, villas, offices, etc.)
+- `locations` (city, district, address, latitude/longitude with GIS indexes)
+- `amenities` & `property_amenities` (many-to-many features)
+- `property_media` (metadata & URLs pointing to object storage)
+- `listings` (status, price, listing type, assigned agent & owner FKs)
+- `favorites` (user-property saves with unique constraints & timestamps)
+- `viewings` (request status, scheduled times, audit timestamps)
+- `conversations` (chat threads linking buyer, seller/agent, and property)
+- `messages` (in-thread chat messages with delivery state & timestamps)
+- `notifications` (user activity & system alerts with read receipts)
+- `reviews` (authenticated buyer reviews & star ratings per property)
+- `reports` (moderation queue for fake listings / suspicious users)
+- `failed_jobs` (Celery background job retry exhaustion dead-letter records)
+- `ai_predictions` & `ai_interactions` (AI outputs & user prompt metadata)
 
-PostgreSQL remains the source of truth.
+PostgreSQL remains the single source of truth.
+
+### Database Audit & Integrity Standards
+1. **Universal Timestamps:** All primary and association tables include `created_at` and `updated_at` (managed via a shared Django `TimeStampedModel` abstract base class).
+2. **Soft Deletes:** Critical business records (`properties`, `listings`, `users`) include `is_deleted` and `deleted_at` to preserve referential history and audit trails.
+3. **No Redundant Hash Columns:** User passwords are managed by Django's native authentication framework; no raw `password_hash` column is declared independently.
+4. **Geospatial Capabilities:** Property `locations` store `latitude` and `longitude` with PostgreSQL indexes (or PostGIS `PointField`) enabling radius queries ("find properties within 5km").
 
 ```text
 Django
   ↓
-Repository
+Repository / QuerySet
   ↓
 Django ORM
   ↓

@@ -89,6 +89,29 @@ Production uses HTTPS everywhere.
 - TLS termination can be handled by the reverse proxy, load balancer, or hosting platform.
 - Enable HSTS in production when appropriate.
 
+## Admin Panel & Moderation Interface
+
+For platform operations, user moderation, report reviews, and system oversight:
+- **Django Built-in Admin:** Leveraged as the primary administrative dashboard (`/admin/`).
+- **Security Hardening:**
+  - Placed behind Django `is_staff` and `is_superuser` role checks.
+  - Rate-limited and protected with brute-force lockout (`django-axes`).
+  - Styled and customized using `django-unfold` or `jazzmin` for a modern, high-polish UI.
+  - Dedicated audit logs tracking all administrative actions (approvals, user bans, listing removals).
+
+---
+
+## Transactional Email Architecture
+
+Critical communications (welcome verification, password reset, viewing confirmations, offline message notifications) use a decoupled async pipeline:
+- **Template System:** HTML email templates using Django's template engine.
+- **Provider:** Decoupled behind Django's `EMAIL_BACKEND` abstraction:
+  - Local Dev: Console backend / Mailpit container in Docker (`http://localhost:8025`).
+  - Production / Demo: Free tier of **Resend** (3,000 emails/month free) or **Brevo** (300 emails/day free, no credit card required).
+- **Execution:** Dispatched asynchronously via Celery workers to keep API response times instantaneous.
+
+---
+
 ## Secrets
 
 Never commit secrets to Git.

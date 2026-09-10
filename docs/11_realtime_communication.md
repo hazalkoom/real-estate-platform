@@ -2,17 +2,18 @@
 
 ## Decision
 
-Use **WebSockets** for the small number of features that genuinely need real-time updates.
+Use **WebSockets via Django Channels** for the small number of features that genuinely need real-time updates.
 
 The project will use:
 
-- Django as the backend
-- GraphQL for normal API operations
-- WebSockets for real-time communication
-- Redis as the shared real-time/backplane infrastructure
-- Celery for background jobs
+- **Django Channels** for native asynchronous WebSocket handling inside the Django modular monolith
+- **Uvicorn / ASGI** as the application server running both HTTP and WebSocket protocols
+- **Redis Channel Layer (`channels_redis`)** as the pub/sub backplane for message distribution
+- **GraphQL (Strawberry)** for standard request/response mutations and queries
+- **Expo Push Notifications (FCM / APNs)** for offline mobile user delivery
+- **Celery** for background tasks (e.g. broadcasting async jobs or processing push notifications)
 
-We will **not** introduce a separate WebSocket microservice.
+We will **not** introduce a separate external WebSocket microservice (e.g. separate Node.js or Go server).
 
 ---
 
@@ -193,16 +194,20 @@ Example:
 ```text
 User B offline
       ↓
-Message created
+Message / Notification created
       ↓
 PostgreSQL
       ↓
-Notification created
+Celery background job
+      ↓
+Expo Push Notification (FCM / APNs)
+      ↓
+User B's phone displays lock-screen notification
 ```
 
-When User B comes back online, the client can retrieve missed messages/notifications through GraphQL.
+When User B clicks the push notification or comes back online, the client retrieves fresh data through GraphQL.
 
-This means WebSockets are a delivery mechanism, not permanent storage.
+This means WebSockets are a live delivery mechanism for connected clients, while persistent tables and push notifications guarantee no messages are ever lost.
 
 ---
 

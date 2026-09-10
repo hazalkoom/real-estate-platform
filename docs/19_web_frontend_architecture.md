@@ -245,9 +245,28 @@ Strategy:
 - Use real backend integration mainly through E2E tests.
 - Keep E2E coverage focused on critical user journeys.
 
+## SEO & Social Media Metadata Strategy (SPA Pre-rendering)
+
+Because real estate marketplaces depend heavily on organic search indexing (Google, Bing) and rich link previews on social platforms (WhatsApp, Facebook, Twitter, iMessage), a standard client-rendered SPA requires deliberate SEO handling:
+
+### 1. Dynamic Document Head Management
+Use `@unhead/react` or `react-helmet-async` on every property listing page:
+- Canonical URLs (`<link rel="canonical" href="...">`)
+- Structured JSON-LD metadata for RealEstateListing (`schema.org/Product` or `schema.org/RealEstateListing`)
+- OpenGraph tags (`og:title`, `og:description`, `og:image`, `og:price:amount`, `og:price:currency`)
+
+### 2. Bot Detection & Static Snapshot Serving (Pre-rendering)
+For search engine bots and social scrapers (`Googlebot`, `bingbot`, `Twitterbot`, `facebookexternalhit`, `WhatsApp`):
+- **Caddy / Reverse Proxy Rule:** When a crawler user-agent is detected requesting `/properties/:id`, Caddy either serves a lightweight pre-rendered HTML snapshot generated on property publication/update, or delegates to a serverless edge function / prerender service.
+- **Human Visitors:** Receive the full Vite React SPA bundle with rich interactive client hydration, Apollo cache, and instant client-side navigation.
+
+This delivers 100% SEO indexability and rich social cards without abandoning the clean Vite + React SPA architecture.
+
+---
+
 ## Build & Deployment
 
-Vite produces the production frontend build.
+Vite produces the production frontend build (`dist/`).
 
 The frontend should be deployable independently from Django while communicating with the same GraphQL/WebSocket backend.
 
@@ -255,7 +274,7 @@ Development and deployment will use the Docker/infrastructure decisions from the
 
 ## Decisions Not to Add Initially
 
-- Next.js
+- Next.js (Full-stack framework overhead avoided in favor of Vite SPA + pre-render snapshots)
 - Redux
 - Another server-state library alongside Apollo Client
 - A separate frontend backend-for-frontend

@@ -50,6 +50,11 @@ The architecture and engineering plan is split into focused documents:
 16. [Security Architecture](docs/16_security_architecture.md)
 17. [Deployment & Infrastructure](docs/17_deployment_infrastructure.md)
 18. [CI/CD](docs/18_ci_cd.md)
+19. [Web Frontend Architecture](docs/19_web_frontend_architecture.md)
+20. [Mobile Architecture](docs/20_mobile_architecture.md)
+21. [Shared Frontend Strategy](docs/21_shared_frontend_strategy.md)
+22. [Product UX & User Flows](docs/22_product_ux_and_user_flows.md)
+23. [Frontend & System Testing Strategy](docs/23_frontend_and_system_testing_strategy.md)
 
 ## High-Level Architecture
 

@@ -7,35 +7,52 @@ Define how users prove their identity and what each role is allowed to do.
 - **Authentication:** Who are you?
 - **Authorization:** What are you allowed to do?
 
-## Roles
+## Roles & Persona Model
 
-- Guest
-- Buyer
-- Owner
+- Guest (unauthenticated)
+- Buyer / Customer
+- Owner / Seller
 - Agent
 - Admin
 
-Guests are unauthenticated visitors, not database users.
+### Multi-Role Flexibility
+In real estate marketplaces, a user can simultaneously act as a **Buyer** (searching and favoriting homes) and an **Owner** (listing a property for sale).
+Rather than restricting an account to a single mutually-exclusive enum:
+- Users have a base account (`User`).
+- Role capabilities are represented via user profile flags or permissions (`is_agent`, `is_owner`, `is_staff`).
+- Any registered user can register as an Owner by submitting a property listing.
+- Agent accounts require an administrative verification workflow.
 
-## Authentication plan
+## Dual-Mode Authentication Architecture
 
-Use token-based authentication suitable for web and mobile.
+The Django backend serves both the Web frontend (React SPA) and Mobile app (React Native / Expo). To maximize security and compatibility on each platform, Django implements a **Dual-Mode Authentication Middleware**:
 
 ```text
-Login
-  ↓
-Access token + Refresh token
-  ↓
-Client sends access token with GraphQL requests
-  ↓
-Django identifies the user
-  ↓
-Authorization checks permissions
+Incoming Request
+       │
+       ├── Web Browser?
+       │   └── Extracts JWT from HttpOnly, Secure, SameSite=Lax Cookie
+       │       └── Protected against XSS attacks
+       │
+       └── Mobile App (Expo)?
+           └── Extracts JWT from "Authorization: Bearer <token>" Header
+               └── Token stored in Expo SecureStore (Keychain / Keystore)
+       │
+       ▼
+Authentication Middleware
+       │
+       ├── Validate JWT signature and expiration
+       ├── Check token blacklist in Redis (for revoked tokens / logout)
+       ▼
+Attach `user` to GraphQL Context (`info.context.user`)
 ```
 
-The exact token library, expiration values, storage, refresh/revocation mechanism, and optional social login will be finalized during implementation.
+### Real-Time WebSocket Authentication
+WebSocket handshakes cannot easily set custom HTTP headers on native browser connections:
+- **Web:** Browser automatically forwards the `HttpOnly` cookie during the WebSocket upgrade request (`ws://` / `wss://`). Django Channels ASGI auth middleware inspects the cookie.
+- **Mobile:** Mobile client sends a ticket or the JWT token in query parameters during connection handshake (e.g. `wss://api.example.com/graphql?token=<jwt>`). The token is immediately validated and discarded from the URL.
 
-Passwords are securely hashed and never stored as plaintext.
+Passwords are securely hashed using Django's default PBKDF2 / Argon2 algorithm and never stored as plaintext.
 
 ## Permission matrix
 

@@ -188,20 +188,17 @@ If the project grows, they can be separated without changing the application's o
 
 ---
 
-## Interaction With Real-Time Communication
+## Redis Multi-Role Resource Partitioning
 
-Redis may also support the WebSocket/channel layer.
+Because Redis serves 4 distinct workloads (Cache, Celery Broker, Django Channels backplane, Rate Limiting), we must prevent cache evictions from dropping Celery tasks or disconnecting active WebSockets.
 
-Therefore the development architecture can use:
+### Logical Database Partitioning:
+- **`db 0` — Application Cache:** Uses `volatile-lru` eviction policy (only keys with an explicit TTL can be evicted under memory pressure).
+- **`db 1` — Celery Broker:** Never evicted (`noeviction`). Jobs remain safe in queues.
+- **`db 2` — Channels Channel Layer:** Ephemeral pub/sub message groups.
+- **`db 3` — Rate Limiting & Blacklisted Tokens:** Security counters with short TTLs.
 
-```text
-                  Redis
-             /      |       \
-            ↓       ↓        ↓
-         Cache   Celery   WebSockets
-```
-
-We will avoid treating Redis as a general-purpose database for application data.
+In Docker Compose and staging, a single Redis server with distinct DB indices provides total operational isolation without extra infrastructure costs.
 
 ---
 
@@ -209,14 +206,14 @@ We will avoid treating Redis as a general-purpose database for application data.
 
 1. PostgreSQL is the source of truth.
 2. Redis is the cache.
-3. Use cache-aside.
-4. Cache selectively based on real usage.
-5. Every cache entry gets a TTL.
-6. Invalidate changed data where practical.
-7. Prefer short TTLs over complicated invalidation systems.
-8. Optimize PostgreSQL queries before introducing caching.
-9. Redis failure should degrade performance, not break core functionality.
-10. Do not introduce another caching technology.
+3. Use cache-aside with `volatile-lru` eviction.
+4. Separate Celery broker, cache, and channels across distinct Redis DB numbers.
+5. Cache selectively based on real usage.
+6. Every cache entry gets an explicit TTL.
+7. Invalidate changed data where practical.
+8. Prefer short TTLs over complicated invalidation systems.
+9. Optimize PostgreSQL queries before introducing caching.
+10. Redis failure should degrade performance, not break core functionality.
 
 ---
 
@@ -228,9 +225,10 @@ Django Modular Monolith
         ├── PostgreSQL → source of truth
         │
         └── Redis
-             ├── Cache
-             ├── Celery broker
-             └── WebSocket/channel support
+             ├── db 0: Cache (volatile-lru)
+             ├── db 1: Celery broker (noeviction)
+             ├── db 2: Django Channels (WebSockets)
+             └── db 3: Rate limits & token revocation
 ```
 
 Caching will remain intentionally small and focused. We will expand it only when measurements show a real performance need.

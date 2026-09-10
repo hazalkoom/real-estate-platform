@@ -2,24 +2,24 @@
 
 ## Decision
 
-The backend will use a simple layered structure inside the modular monolith.
+The backend will use a clean layered structure inside the modular monolith, oriented around the **GraphQL primary API** (with secondary REST endpoints reserved for specific concerns like health checks or direct binary uploads).
 
-The initial request flow is:
+The standard request flow is:
 
 ```text
-HTTP Request
+GraphQL / HTTP Request
      ↓
-URL
+URL / Routing (/graphql)
      ↓
-Middleware
+Middleware (CORS, Logging, Auth Context)
      ↓
-View / Controller
+GraphQL Resolvers (Queries / Mutations)
      ↓
-Serializer / Validation
+Input Validation (Pydantic / Strawberry Input Types)
      ↓
-Service
+Application Service
      ↓
-Repository
+Repository / QuerySet Layer
      ↓
 Django Model / ORM
      ↓
@@ -30,14 +30,14 @@ Not every operation must use every layer. The layers exist to keep responsibilit
 
 ---
 
-## 1. URL
+## 1. URL / Routing
 
-Responsible for routing a request to the correct endpoint.
+Responsible for routing the request to the GraphQL schema endpoint or specialized utility endpoints.
 
 ```text
-POST /properties/
+POST /graphql
         ↓
-Property View
+GraphQL View / Handler
 ```
 
 URLs should not contain business logic.
@@ -50,52 +50,41 @@ Responsible for processing requests/responses around the main endpoint.
 
 Potential responsibilities include:
 
-- Authentication-related processing
-- Logging
+- Authentication context extraction (dual-mode: cookies for web, Bearer tokens for mobile)
+- Request ID generation (`request_id` propagation)
 - CORS
 - Rate limiting
-- Other cross-cutting request concerns
-
-Request-specific data validation will generally be handled by serializers rather than custom middleware.
+- Logging and error capture
 
 ---
 
-## 3. View / Controller
+## 3. GraphQL Resolvers (Queries & Mutations)
 
-Responsible for handling the HTTP/API side of the operation.
+Responsible for handling the API contract side of the operation:
 
-It should:
+- Receive incoming GraphQL query, mutation, or subscription requests
+- Unpack arguments / typed input objects
+- Check field-level authorization / permissions
+- Delegate actual business logic to application services
+- Shape and return domain objects matching the GraphQL schema types
 
-- Receive the request
-- Pass validated data to the appropriate service
-- Return the HTTP response
-- Select the appropriate status code
-
-It should not contain large amounts of business logic.
-
-In Django REST Framework, DRF Views and ViewSets fill this role.
+Resolvers should **never** contain core business logic or raw SQL queries.
 
 ---
 
-## 4. Serializer / Validation
+## 4. Input Validation
 
-Responsible for validating and transforming API data.
+Responsible for validating and transforming incoming data before reaching domain services:
 
-For incoming data, serializers can check:
-
-- Required fields
-- Data types
-- Field constraints
-- Relationships
-- Request-specific validation
-
-For outgoing data, serializers transform application objects into API responses.
+- Required fields and types (enforced by the GraphQL schema)
+- Complex field constraints and cross-field validation (via Strawberry input validators or Zod/Pydantic schemas)
+- Sanitizing string inputs against XSS and injection
 
 ---
 
 ## 5. Service
 
-Responsible for application/use-case logic.
+Responsible for application / domain / use-case logic.
 
 Examples:
 
@@ -107,39 +96,37 @@ AddFavorite
 SendMessage
 ```
 
-A service coordinates the operation and applies the necessary business rules.
+A service coordinates the operation and applies business rules.
 
 Example:
 
 ```text
 Request Viewing
       ↓
-Check user
+Check user identity & permissions
       ↓
-Check property/listing
+Verify property / listing availability
       ↓
-Check business rules
+Enforce business rules (e.g., no overlapping viewings)
       ↓
-Create viewing
+Persist viewing via repository / ORM
       ↓
-Publish event if necessary
+Publish domain event (ViewingRequested)
 ```
 
-Services should not be responsible for HTTP details.
+Services remain independent of transport details (they do not know whether the request came from GraphQL, a Celery job, or a test).
 
 ---
 
-## 6. Repository
+## 6. Repository / QuerySet Layer
 
-Responsible for data access.
-
-The repository provides a clear interface for retrieving and storing data.
+Responsible for data access abstraction and query optimization.
 
 Examples:
 
 ```text
 get_property(id)
-find_active_listing(property_id)
+find_active_listings(filters)
 create_viewing(data)
 save_property(property)
 ```
@@ -149,24 +136,23 @@ Conceptually:
 ```text
 Service
    ↓
-Repository
+Repository / Custom QuerySet
    ↓
-Django ORM
+Django ORM (select_related / prefetch_related)
    ↓
 PostgreSQL
 ```
 
-The service decides **what the application needs**.
+The service decides **what business data is needed**.
+The repository / custom QuerySet decides **how to query and optimize it** (preventing N+1 queries using `select_related` and `prefetch_related`).
 
-The repository decides **how to retrieve or store it**.
-
-Repositories will only be introduced where they provide a useful boundary. We will avoid creating pointless wrappers around simple ORM operations.
+*Note:* Repositories provide a boundary for testability and complex queries, rather than redundant boilerplate around simple one-liner model calls.
 
 ---
 
 ## 7. Django Model / ORM
 
-Responsible for representing database data and providing the database abstraction.
+Responsible for representing database schema, relations, constraints, and providing the Active Record / QuerySet interface.
 
 Example:
 
@@ -175,17 +161,13 @@ class Property(models.Model):
     ...
 ```
 
-Django's ORM handles communication with PostgreSQL.
-
-The model should not become a dumping ground for unrelated application logic.
+The model contains entity properties and database-level constraints (`UniqueConstraint`, `CheckConstraint`), but not broad multi-entity business workflows.
 
 ---
 
 ## 8. PostgreSQL
 
-The main persistent database.
-
-It stores the application's relational data defined by the project database schema.
+The authoritative persistent relational database storing all structured platform data.
 
 ---
 
@@ -194,26 +176,26 @@ It stores the application's relational data defined by the project database sche
 A customer requests a viewing:
 
 ```text
-POST /viewings/
+POST /graphql (Mutation: requestViewing)
        ↓
-URL
+URL (/graphql)
        ↓
-Middleware
+Middleware (Auth context attached)
        ↓
-ViewingView
+ViewingResolver (mutation: requestViewing)
        ↓
-ViewingSerializer
+RequestViewingInput (validation)
        ↓
-ViewingService
+ViewingService.request_viewing(...)
        ↓
-ListingRepository
+ListingRepository / ORM QuerySet
        ↓
 Django ORM
        ↓
 PostgreSQL
 ```
 
-The service may then create the viewing and publish a `ViewingRequested` event for the Communication module.
+After database commit (`transaction.on_commit`), the service publishes a `ViewingRequested` event for the Communication module to dispatch notifications.
 
 ---
 
@@ -221,28 +203,28 @@ The service may then create the viewing and publish a `ViewingRequested` event f
 
 ```text
 URL
-"What endpoint handles this?"
+"What endpoint routes this?"
 
 Middleware
-"What should happen around the request?"
+"What cross-cutting concerns wrap the request (auth, CORS, tracing)?"
 
-View / Controller
-"What HTTP request did we receive and what response should we return?"
+Resolver
+"What GraphQL query/mutation was requested and what schema type do we return?"
 
-Serializer
-"Is the API data valid and how should it be represented?"
+Input Validation
+"Is the incoming GraphQL payload valid in shape and constraints?"
 
 Service
-"What should the application actually do?"
+"What domain action should the application perform?"
 
-Repository
-"How do we get or save the required data?"
+Repository / QuerySet
+"How do we efficiently retrieve or persist the required data?"
 
 Model / ORM
-"How is this data represented and persisted?"
+"How is this data modeled, constrained, and mapped to the database?"
 
 PostgreSQL
-"Where is the data stored?"
+"Where is authoritative data stored?"
 ```
 
 ---
@@ -278,14 +260,14 @@ For example:
 ```text
 Properties Module
 │
-├── views
-├── serializers
-├── services
-├── repositories
-└── models
+├── schema/          (GraphQL Types, Queries, Mutations, Resolvers)
+├── services/        (Business use-case logic)
+├── repositories/    (Query optimization & data-access abstractions)
+├── models/          (Django ORM database models)
+└── tests/           (Unit, service, and integration tests)
 ```
 
-The same basic structure can be used by other modules where appropriate.
+The same consistent structure is used across all 5 modules.
 
 ---
 

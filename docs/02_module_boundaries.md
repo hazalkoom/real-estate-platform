@@ -84,32 +84,35 @@ Responsible for:
 - Favorites
 - Viewing requests
 - Viewing management
+- Property reviews and ratings
 
 Owns:
 
 ```text
 favorites
 viewings
+reviews
 ```
 
 ---
 
 ### 4. Communication
 
-Responsible for communication between users and system notifications.
+Responsible for communication between users, system notifications, and reporting/moderation.
 
 Responsible for:
 
-- Messages
-- Notifications
-- Message history
-- Notification state
+- Conversations and threaded messages
+- System and user notifications
+- User / property reports for administrative moderation
 
 Owns:
 
 ```text
+conversations
 messages
 notifications
+reports
 ```
 
 ---
