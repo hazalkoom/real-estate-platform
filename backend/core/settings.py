@@ -12,7 +12,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from .env file
 env_path = BASE_DIR / '.env'
 load_dotenv(dotenv_path=env_path)
-
 # ------------------------------------------------------------------------
 # SECURITY WARNING: Use environment variables in production
 # ------------------------------------------------------------------------
@@ -83,11 +82,11 @@ ASGI_APPLICATION = 'core.asgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'real_estate_dev',
-        'USER': 'postgres',
-        'PASSWORD': 'password',
-        'HOST': '127.0.0.1',
-        'PORT': '5432',
+        'NAME': os.environ.get('POSTGRES_DB', 'real_estate_dev'),
+        'USER': os.environ.get('POSTGRES_USER', 'postgres'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'password'),
+        'HOST': os.environ.get('POSTGRES_HOST', '127.0.0.1'),
+        'PORT': os.environ.get('POSTGRES_PORT', '5444'),
     }
 }
 
@@ -95,30 +94,31 @@ DATABASES = {
 # REDIS PARTITIONING 
 # ------------------------------------------------------------------------
 # DB 0: Application Cache
+REDIS_HOST = os.environ.get('REDIS_HOST', '127.0.0.1')
+REDIS_PORT = os.environ.get('REDIS_PORT', '6380')
+REDIS_BASE_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}"
+
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": "redis://127.0.0.1:6379/0",
+        "LOCATION": f"{REDIS_BASE_URL}/0",
     },
-    # DB 3: Rate Limiting & Blacklisted Tokens (Axes)
     "axes_cache": {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": "redis://127.0.0.1:6379/3",
+        "LOCATION": f"{REDIS_BASE_URL}/3",
     }
 }
 
-# DB 1: Celery Broker
-CELERY_BROKER_URL = "redis://127.0.0.1:6379/1"
-CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/1"
+CELERY_BROKER_URL = f"{REDIS_BASE_URL}/1"
+CELERY_RESULT_BACKEND = f"{REDIS_BASE_URL}/1"
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 
-# DB 2: Django Channels (WebSockets)
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
+            "hosts": [f"{REDIS_BASE_URL}/2"],
             "capacity": 1500,
             "expiry": 10,
         },
