@@ -44,3 +44,6 @@ dist/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Local infrastructure data
+infrastructure_data/

@@ -37,7 +37,7 @@ INSTALLED_APPS = [
     'axes',
     
     # Internal Modules (Uncomment as you build them)
-    # 'users',
+    'users',
     # 'properties',
     # 'interactions',
     # 'communication',
@@ -130,6 +130,8 @@ CHANNEL_LAYERS["default"]["CONFIG"]["hosts"] = ["redis://127.0.0.1:6379/2"]
 # ------------------------------------------------------------------------
 # AUTHENTICATION & SECURITY
 # ------------------------------------------------------------------------
+AUTH_USER_MODEL = 'users.User'
+
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.Argon2PasswordHasher",
     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
