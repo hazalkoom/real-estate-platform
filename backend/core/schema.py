@@ -1,7 +1,8 @@
 import strawberry
+from users.schema import Query as UsersQuery
 
 @strawberry.type
-class Query:
+class Query(UsersQuery):
     @strawberry.field
     def hello(self) -> str:
         return "The api is running"

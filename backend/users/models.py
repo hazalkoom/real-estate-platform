@@ -25,7 +25,7 @@ class UserManager(BaseUserManager):
 
         return self.create_user(email, password, **extra_fields)
 
-class user(AbstractBaseUser, PermissionsMixin, TimeStampedModel, SoftDeleteModel):
+class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel, SoftDeleteModel):
     email = models.EmailField(unique=True, db_index=True)
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
