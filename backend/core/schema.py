@@ -1,6 +1,6 @@
 import strawberry
 from users.schema import Query as UsersQuery
-from properties.schema import Query as PropertiesQuery
+from properties.schema import Query as PropertiesQuery, Mutation as PropertiesMutation
 
 @strawberry.type
 class Query(UsersQuery, PropertiesQuery):
@@ -8,4 +8,8 @@ class Query(UsersQuery, PropertiesQuery):
     def hello(self) -> str:
         return "The api is running"
 
-schema = strawberry.Schema(query=Query)
+@strawberry.type
+class Mutation(PropertiesMutation):
+    pass
+
+schema = strawberry.Schema(query=Query, mutation=Mutation)

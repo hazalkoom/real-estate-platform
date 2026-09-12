@@ -1,6 +1,7 @@
 import strawberry
 import strawberry_django
 from .models import PropertyType, Amenity, Location, Property, PropertyMedia, Listing
+from users.types import UserType
 
 @strawberry_django.type(PropertyType)
 class PropertyTypeNode:
@@ -40,6 +41,7 @@ class PropertyNode:
     location: LocationNode
     amenities: list[AmenityNode]
     media: list[PropertyMediaNode]
+    owner: UserType
 
 @strawberry_django.type(Listing)
 class ListingNode:
