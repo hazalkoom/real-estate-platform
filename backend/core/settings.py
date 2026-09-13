@@ -5,6 +5,7 @@ Django settings for core project.
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -166,3 +167,9 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+
+# JWT Authentication Settings
+JWT_SECRET = SECRET_KEY
+JWT_ACCESS_EXPIRATION = timedelta(minutes=15)
+JWT_REFRESH_EXPIRATION = timedelta(days=7)
