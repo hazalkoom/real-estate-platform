@@ -16,6 +16,15 @@ class AuthPayload:
     refresh_token: str
     user: UserType
 
+@strawberry.input
+class RegisterInput:
+    email: str
+    password: str
+    first_name: str
+    last_name: str
+    is_owner: bool = False
+    is_agent: bool = False
+
 # --- QUERIES ---
 @strawberry.type
 class Query:
@@ -35,6 +44,29 @@ class Mutation:
             request=request,
             email=input.email, 
             password=input.password
+        )
+        
+        return AuthPayload(
+            access_token=access,
+            refresh_token=refresh,
+            user=user
+        )
+
+
+    @strawberry.mutation
+    async def register(self, input: RegisterInput) -> AuthPayload:
+        from .services import register_user
+        
+        # Wrap the synchronous database creation in a thread
+        register_async = sync_to_async(register_user, thread_sensitive=True)
+        
+        user, access, refresh = await register_async(
+            email=input.email,
+            password=input.password,
+            first_name=input.first_name,
+            last_name=input.last_name,
+            is_owner=input.is_owner,
+            is_agent=input.is_agent
         )
         
         return AuthPayload(
