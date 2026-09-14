@@ -43,3 +43,14 @@ def register_user(email, password, first_name, last_name, is_owner=False, is_age
     access, refresh = generate_tokens(user)
     
     return user, access, refresh
+
+def change_password(user, old_password, new_password):
+    """
+    Verifies the old password and sets the new one.
+    """
+    if not user.check_password(old_password):
+        raise Exception("Incorrect old password. Are you having a stroke?")
+    
+    user.set_password(new_password)
+    user.save()
+    return True

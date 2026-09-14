@@ -52,6 +52,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'users.middleware.jwt_auth_middleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'axes.middleware.AxesMiddleware', # MUST BE BOTTOM
@@ -173,3 +174,6 @@ MAILERS = {
 JWT_SECRET = SECRET_KEY
 JWT_ACCESS_EXPIRATION = timedelta(minutes=15)
 JWT_REFRESH_EXPIRATION = timedelta(days=7)
+
+# Print emails to the console instead of actually sending them over the internet
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

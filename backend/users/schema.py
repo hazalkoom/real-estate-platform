@@ -2,7 +2,8 @@ import strawberry
 import strawberry_django
 from asgiref.sync import sync_to_async
 from .types import UserType
-from .services import authenticate_user
+from .services import authenticate_user, register_user
+from .permissions import IsAuthenticated, IsOwner, IsAgent
 
 # --- INPUTS & PAYLOADS ---
 @strawberry.input
@@ -25,10 +26,24 @@ class RegisterInput:
     is_owner: bool = False
     is_agent: bool = False
 
+@strawberry.input
+class ChangePasswordInput:
+    old_password: str
+    new_password: str
+
 # --- QUERIES ---
 @strawberry.type
 class Query:
     users: list[UserType] = strawberry_django.field()
+
+    @strawberry.field(permission_classes=[IsAuthenticated])
+    def me(self, info: strawberry.Info) -> UserType:
+        # The middleware already loaded the user, so we just return it
+        return info.context.request.user
+
+    @strawberry.field(permission_classes=[IsOwner])
+    def owner_dashboard(self, info: strawberry.Info) -> str:
+        return "Welcome to the owner dashboard. Here is your sensitive financial data."
 
 # --- MUTATIONS ---
 @strawberry.type
@@ -52,10 +67,9 @@ class Mutation:
             user=user
         )
 
-
     @strawberry.mutation
     async def register(self, input: RegisterInput) -> AuthPayload:
-        from .services import register_user
+     
         
         # Wrap the synchronous database creation in a thread
         register_async = sync_to_async(register_user, thread_sensitive=True)
@@ -74,3 +88,20 @@ class Mutation:
             refresh_token=refresh,
             user=user
         )
+
+    @strawberry.mutation(permission_classes=[IsAuthenticated])
+    async def change_password(self, info: strawberry.Info, input: ChangePasswordInput) -> bool:
+        from .services import change_password
+        request = info.context.request
+        
+        # Wrap the synchronous database operation
+        change_pwd_async = sync_to_async(change_password, thread_sensitive=True)
+        
+        # Execute it using the user object injected by our JWT middleware
+        result = await change_pwd_async(
+            user=request.user, 
+            old_password=input.old_password, 
+            new_password=input.new_password
+        )
+        
+        return result
