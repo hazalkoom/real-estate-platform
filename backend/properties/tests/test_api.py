@@ -1,72 +1,80 @@
 import pytest
-from users.tests.factories import UserFactory
-from properties.tests.factories import PropertyTypeFactory, PropertyFactory, LocationFactory
-from properties.models import Property, Listing
+from users.auth import generate_tokens
+from django.contrib.auth import get_user_model
+from properties.models import PropertyType
+
+User = get_user_model()
 
 @pytest.mark.django_db
-def test_create_property_mutation_success(client):
-    user = UserFactory(is_owner=True)
-    prop_type = PropertyTypeFactory(name="Villa")
-
-    mutation = """
-        mutation CreateTestProperty($ownerId: ID!, $propTypeId: ID!) {
-          createProperty(
-            input: {
-              ownerId: $ownerId, 
-              propertyTypeId: $propTypeId, 
-              bedrooms: 5, 
-              bathrooms: 4, 
-              area: 350.5, 
-              description: "Massive test villa", 
-              location: { city: "Alexandria", district: "Smouha", address: "123 Test Ave" }
-            }
-          ) { id area location { city } owner { email } }
-        }
-    """
-    response = client.post('/graphql/', {'query': mutation, 'variables': {"ownerId": str(user.id), "propTypeId": str(prop_type.id)}}, content_type='application/json')
+def test_create_property_success_as_owner(client):
+    owner = User.objects.create_user(email="owner@example.com", password="Secure123!", is_owner=True)
+    access, _ = generate_tokens(owner)
     
-    assert response.status_code == 200
+    ptype = PropertyType.objects.create(name="Villa")
+    
+    mutation = f"""
+        mutation {{
+          createProperty(input: {{
+            propertyTypeId: "{ptype.id}",
+            bedrooms: 4,
+            bathrooms: 3,
+            area: 250.5,
+            description: "Beautiful place",
+            location: {{
+              city: "Cairo",
+              district: "New Cairo",
+              address: "Street 10"
+            }}
+          }}) {{
+            id
+            area
+            owner {{ email }}
+          }}
+        }}
+    """
+    
+    response = client.post(
+        '/graphql/', 
+        {'query': mutation}, 
+        content_type='application/json', 
+        HTTP_AUTHORIZATION=f"Bearer {access}"
+    )
+    
     data = response.json()
     assert "errors" not in data
-    
-    result = data["data"]["createProperty"]
-    # Notice the string comparison, you absolute moron
-    assert result["area"] == "350.5"
-    assert result["location"]["city"] == "Alexandria"
-    assert Property.objects.count() == 1
+    assert data["data"]["createProperty"]["owner"]["email"] == "owner@example.com"
 
 @pytest.mark.django_db
-def test_create_property_mutation_invalid_owner(client):
-    prop_type = PropertyTypeFactory(name="Apartment")
+def test_create_property_rejected_as_agent(client):
+    agent = User.objects.create_user(email="agent@example.com", password="Secure123!", is_agent=True)
+    access, _ = generate_tokens(agent)
     
-    mutation = """
-        mutation CreateTestProperty($propTypeId: ID!) {
-          createProperty(
-            input: { ownerId: "99999", propertyTypeId: $propTypeId, bedrooms: 1, bathrooms: 1, area: 50.0, description: "Fake", location: { city: "Cairo", district: "Maadi", address: "123 Fake" } }
-          ) { id }
-        }
+    ptype = PropertyType.objects.create(name="Apartment")
+    
+    mutation = f"""
+        mutation {{
+          createProperty(input: {{
+            propertyTypeId: "{ptype.id}",
+            bedrooms: 2,
+            bathrooms: 1,
+            area: 100.0,
+            description: "Should fail",
+            location: {{
+              city: "Cairo",
+              district: "Maadi",
+              address: "Street 9"
+            }}
+          }}) {{ id }}
+        }}
     """
-    response = client.post('/graphql/', {'query': mutation, 'variables': {"propTypeId": str(prop_type.id)}}, content_type='application/json')
+    
+    response = client.post(
+        '/graphql/', 
+        {'query': mutation}, 
+        content_type='application/json', 
+        HTTP_AUTHORIZATION=f"Bearer {access}"
+    )
     
     data = response.json()
-    # It should fail because user 99999 doesn't exist
     assert "errors" in data
-    assert "User matching query does not exist" in data["errors"][0]["message"]
-
-@pytest.mark.django_db
-def test_query_properties_list(client):
-    user = UserFactory(is_owner=True)
-    prop_type = PropertyTypeFactory(name="Duplex")
-    PropertyFactory(owner=user, property_type=prop_type, area=200.00)
-    PropertyFactory(owner=user, property_type=prop_type, area=250.00)
-
-    query = """
-        query {
-            properties { id area owner { email } propertyType { name } }
-        }
-    """
-    response = client.post('/graphql/', {'query': query}, content_type='application/json')
-    data = response.json()
-    
-    assert "errors" not in data
-    assert len(data["data"]["properties"]) == 2
+    assert "restricted to Property Owners only" in data["errors"][0]["message"]

@@ -2,7 +2,7 @@ from strawberry.permission import BasePermission
 from strawberry.types import Info
 
 class IsAuthenticated(BasePermission):
-    message = "You must be logged in with a valid token to access this, ya ghabi."
+    message = "You must be logged in with a valid token to perform this action."
 
     def has_permission(self, source, info: Info, **kwargs) -> bool:
         request = info.context.request

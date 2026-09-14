@@ -1,13 +1,9 @@
 import strawberry
 import strawberry_django
+from asgiref.sync import sync_to_async
 from .types import PropertyNode, ListingNode, AmenityNode, PropertyTypeNode
-from django.contrib.auth import get_user_model
-from .models import Property, Location, PropertyType
+from users.permissions import IsOwner
 
-
-User = get_user_model()
-
-# --- INPUT TYPES ---
 @strawberry.input
 class LocationInput:
     city: str
@@ -16,18 +12,15 @@ class LocationInput:
     latitude: float | None = None
     longitude: float | None = None
 
-
 @strawberry.input
 class PropertyInput:
     property_type_id: strawberry.ID
-    owner_id: strawberry.ID  # Temporary! We will use JWT auth context for this later.
     bedrooms: int
     bathrooms: int
     area: float
     description: str
     location: LocationInput
 
-# --- QUERIES ---
 @strawberry.type
 class Query:
     properties: list[PropertyNode] = strawberry_django.field()
@@ -35,33 +28,31 @@ class Query:
     amenities: list[AmenityNode] = strawberry_django.field()
     property_types: list[PropertyTypeNode] = strawberry_django.field()
 
-# --- MUTATIONS ---
 @strawberry.type
 class Mutation:
-    @strawberry.mutation
-    async def create_property(self, input: PropertyInput) -> PropertyNode:
-        # 1. Fetch relations using aget() instead of get()
-        owner = await User.objects.aget(id=input.owner_id)
-        prop_type = await PropertyType.objects.aget(id=input.property_type_id)
+    
+    @strawberry.mutation(permission_classes=[IsOwner])
+    async def create_property(self, info: strawberry.Info, input: PropertyInput) -> PropertyNode:
+        from .services import create_property_service
         
-        # 2. Create the nested Location object using acreate()
-        location = await Location.objects.acreate(
-            city=input.location.city,
-            district=input.location.district,
-            address=input.location.address,
-            latitude=input.location.latitude,
-            longitude=input.location.longitude
-        )
+        request = info.context.request
         
-        # 3. Create the actual Property using acreate()
-        property_obj = await Property.objects.acreate(
-            owner=owner,
-            property_type=prop_type,
-            location=location,
+        # Convert the Strawberry input into a standard Python dictionary for the service layer
+        location_dict = {
+            'city': input.location.city,
+            'district': input.location.district,
+            'address': input.location.address,
+            'latitude': input.location.latitude,
+            'longitude': input.location.longitude,
+        }
+        
+        create_async = sync_to_async(create_property_service, thread_sensitive=True)
+        return await create_async(
+            user=request.user,
+            property_type_id=input.property_type_id,
             bedrooms=input.bedrooms,
             bathrooms=input.bathrooms,
             area=input.area,
-            description=input.description
+            description=input.description,
+            location_data=location_dict
         )
-        
-        return property_obj
