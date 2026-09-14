@@ -1,10 +1,12 @@
 from django.contrib.auth import authenticate, get_user_model
-from .auth import generate_tokens
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.conf import settings
+from .auth import generate_tokens
 
 User = get_user_model()
 
@@ -15,7 +17,7 @@ def authenticate_user(request, email, password):
     user = authenticate(request=request, email=email, password=password)
     
     if not user:
-        raise Exception("Invalid credentials. Learn to type your password, ya ghabi.")
+        raise Exception("Invalid credentials.")
     
     if not user.is_active:
         raise Exception("This account has been deactivated.")
@@ -29,11 +31,16 @@ def register_user(email, password, first_name, last_name, is_owner=False, is_age
     """
     Handles registering a new user and auto-generating their initial JWT tokens.
     """
-    # Check if the idiot is trying to use an email that already exists
     if User.objects.filter(email=email).exists():
-        raise Exception("A user with this email already exists, ya hmar.")
+        raise Exception("A user with this email already exists.")
     
-    # Create the user using the manager we built earlier
+    # Validate the password before creating the user
+    try:
+        validate_password(password)
+    except ValidationError as e:
+        raise Exception(f"Password validation failed: {' '.join(e.messages)}")
+    
+    # Create the user using the manager
     user = User.objects.create_user(
         email=email,
         password=password,
@@ -53,7 +60,12 @@ def change_password(user, old_password, new_password):
     Verifies the old password and sets the new one.
     """
     if not user.check_password(old_password):
-        raise Exception("Incorrect old password. Are you having a stroke?")
+        raise Exception("Incorrect old password.")
+    
+    try:
+        validate_password(new_password, user=user)
+    except ValidationError as e:
+        raise Exception(f"Password validation failed: {' '.join(e.messages)}")
     
     user.set_password(new_password)
     user.save()
@@ -66,7 +78,6 @@ def request_password_reset(email):
     user = User.objects.filter(email=email).first()
     
     # We return True even if the user doesn't exist to prevent email enumeration attacks.
-    # If we threw an error, hackers could use this endpoint to guess registered emails.
     if not user:
         return True
         
@@ -75,12 +86,12 @@ def request_password_reset(email):
     # Generate a one-time use token
     token = default_token_generator.make_token(user)
     
-    # We assume your frontend (Angular) will run on port 4200 and have a /reset-password route
+    # We assume your frontend (React SPA) will run on FRONTEND_URL and have a /reset-password route
     reset_link = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
     
     send_mail(
         subject='Real Estate Platform - Password Reset',
-        message=f'Click the link to reset your password: {reset_link}\n\nIf you did not request this, ignore this email, ya ghabi.',
+        message=f'Click the link to reset your password: {reset_link}\n\nIf you did not request this, ignore this email.',
         from_email=None,  # Uses DEFAULT_FROM_EMAIL from settings
         recipient_list=[user.email],
         fail_silently=False,
@@ -100,6 +111,11 @@ def confirm_password_reset(uidb64, token, new_password):
 
     if not default_token_generator.check_token(user, token):
         raise Exception("Token is invalid or expired. Request a new one.")
+
+    try:
+        validate_password(new_password, user=user)
+    except ValidationError as e:
+        raise Exception(f"Password validation failed: {' '.join(e.messages)}")
 
     user.set_password(new_password)
     user.save()
