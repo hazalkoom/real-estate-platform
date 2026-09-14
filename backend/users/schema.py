@@ -31,6 +31,16 @@ class ChangePasswordInput:
     old_password: str
     new_password: str
 
+@strawberry.input
+class PasswordResetRequestInput:
+    email: str
+
+@strawberry.input
+class PasswordResetConfirmInput:
+    uid: str
+    token: str
+    new_password: str
+
 # --- QUERIES ---
 @strawberry.type
 class Query:
@@ -105,3 +115,22 @@ class Mutation:
         )
         
         return result
+
+    @strawberry.mutation
+    async def request_password_reset(self, input: PasswordResetRequestInput) -> bool:
+        from .services import request_password_reset
+        
+        # Wrap the synchronous database and email sending operations
+        reset_async = sync_to_async(request_password_reset, thread_sensitive=True)
+        return await reset_async(email=input.email)
+
+    @strawberry.mutation
+    async def confirm_password_reset(self, input: PasswordResetConfirmInput) -> bool:
+        from .services import confirm_password_reset
+        
+        confirm_async = sync_to_async(confirm_password_reset, thread_sensitive=True)
+        return await confirm_async(
+            uidb64=input.uid, 
+            token=input.token, 
+            new_password=input.new_password
+        )

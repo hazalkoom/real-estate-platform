@@ -192,3 +192,6 @@ MAILERS = {
         }
     }
 }
+
+# --- FRONTEND ROUTING ---
+FRONTEND_URL = env.str("FRONTEND_URL", default="http://localhost:4200")

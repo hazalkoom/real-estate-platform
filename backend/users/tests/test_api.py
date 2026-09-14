@@ -3,6 +3,10 @@ from django.contrib.auth import get_user_model
 from core.schema import schema
 from .factories import UserFactory
 from users.auth import generate_tokens
+from django.core import mail
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+from django.contrib.auth.tokens import default_token_generator
 
 User = get_user_model()
 
@@ -219,3 +223,71 @@ def test_change_password_wrong_old_password(client):
     data = response.json()
     assert "errors" in data
     assert "Incorrect old password" in data["errors"][0]["message"]
+
+@pytest.mark.django_db
+def test_request_password_reset_success(client):
+    User.objects.create_user(email="resetme@example.com", password="OldPassword123!")
+    
+    mutation = """
+        mutation {
+          requestPasswordReset(input: { email: "resetme@example.com" })
+        }
+    """
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json')
+    data = response.json()
+    
+    assert "errors" not in data
+    assert data["data"]["requestPasswordReset"] is True
+    
+    # Verify Django actually put the email in the outbox
+    assert len(mail.outbox) == 1
+    assert "resetme@example.com" in mail.outbox[0].to
+    assert "reset-password?uid=" in mail.outbox[0].body
+
+@pytest.mark.django_db
+def test_confirm_password_reset_success(client):
+    user = User.objects.create_user(email="confirm@example.com", password="OldPassword123!")
+    
+    # Manually generate valid tokens for the test
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+    
+    mutation = f"""
+        mutation {{
+          confirmPasswordReset(input: {{
+            uid: "{uid}",
+            token: "{token}",
+            newPassword: "NewSecurePassword789!"
+          }})
+        }}
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json')
+    data = response.json()
+    
+    assert "errors" not in data
+    assert data["data"]["confirmPasswordReset"] is True
+    
+    user.refresh_from_db()
+    assert user.check_password("NewSecurePassword789!") is True
+
+@pytest.mark.django_db
+def test_confirm_password_reset_invalid_token(client):
+    user = User.objects.create_user(email="badtoken@example.com", password="OldPassword123!")
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    
+    mutation = f"""
+        mutation {{
+          confirmPasswordReset(input: {{
+            uid: "{uid}",
+            token: "garbage-fake-token-123",
+            newPassword: "NewSecurePassword789!"
+          }})
+        }}
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json')
+    data = response.json()
+    
+    assert "errors" in data
+    assert "invalid or expired" in data["errors"][0]["message"]
