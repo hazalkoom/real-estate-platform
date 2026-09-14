@@ -6,10 +6,14 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import timedelta
+import environ
+
+env = environ.Env()
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 # Load environment variables from .env file
 env_path = BASE_DIR / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -175,5 +179,16 @@ JWT_SECRET = SECRET_KEY
 JWT_ACCESS_EXPIRATION = timedelta(minutes=15)
 JWT_REFRESH_EXPIRATION = timedelta(days=7)
 
-# Print emails to the console instead of actually sending them over the internet
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# --- EMAIL CONFIGURATION (Django 6.0+) ---
+MAILERS = {
+    "default": {
+        "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+        "OPTIONS": {
+            "host": env.str("EMAIL_HOST"),
+            "port": env.int("EMAIL_PORT"),
+            "use_tls": env.bool("EMAIL_USE_TLS"),
+            "username": env.str("EMAIL_USER"),  # <--- Change this to 'username'
+            "password": env.str("EMAIL_PASSWORD"),
+        }
+    }
+}
