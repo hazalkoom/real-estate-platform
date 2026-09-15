@@ -187,3 +187,19 @@ def delete_property_media_service(user, media_id):
     # Hard delete because PropertyMedia does not inherit SoftDeleteModel
     media.delete()
     return True
+
+def assign_property_amenities_service(user, property_id, amenity_ids):
+    """
+    Assigns a list of amenities to a property. Overwrites existing ones.
+    """
+    try:
+        prop = Property.objects.get(id=property_id, is_deleted=False)
+    except Property.DoesNotExist:
+        raise Exception("Property not found. Stop hallucinating.")
+
+    if prop.owner != user:
+        raise Exception("Access denied. You cannot modify amenities for someone else's property, ya harami.")
+
+    # Django's .set() automatically handles clearing old relationships and adding new ones
+    prop.amenities.set(amenity_ids)
+    return prop

@@ -2,7 +2,7 @@ import pytest
 from users.auth import generate_tokens
 from django.contrib.auth import get_user_model
 from properties.models import PropertyType
-from properties.models import Listing
+from properties.models import Listing, Amenity
 
 User = get_user_model()
 
@@ -381,3 +381,75 @@ def test_delete_property_media_idor_prevention(client):
     
     assert "errors" in data
     assert "Access denied" in data["errors"][0]["message"]
+
+@pytest.mark.django_db
+def test_assign_property_amenities_success(client):
+    owner = User.objects.create_user(email="api_amenity@example.com", password="Secure123!", is_owner=True)
+    access, _ = generate_tokens(owner)
+    
+    ptype = PropertyType.objects.create(name="Townhouse")
+    from properties.services import create_property_service
+    prop = create_property_service(
+        user=owner, 
+        property_type_id=ptype.id, 
+        bedrooms=1, 
+        bathrooms=1, 
+        area=50.0, 
+        description="Test", 
+        location_data={"city": "Cairo", "district": "Maadi", "address": "123"}
+    )
+    
+    a1 = Amenity.objects.create(name="WiFi")
+    a2 = Amenity.objects.create(name="Parking")
+    
+    mutation = f"""
+        mutation {{
+          assignPropertyAmenities(input: {{
+            propertyId: "{prop.id}",
+            amenityIds: ["{a1.id}", "{a2.id}"]
+          }}) {{
+            id
+            amenities {{ name }}
+          }}
+        }}
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json', HTTP_AUTHORIZATION=f"Bearer {access}")
+    data = response.json()
+    
+    assert "errors" not in data
+    assert len(data["data"]["assignPropertyAmenities"]["amenities"]) == 2
+
+@pytest.mark.django_db
+def test_assign_property_amenities_idor(client):
+    owner = User.objects.create_user(email="real_amenity_owner@example.com", password="Secure123!", is_owner=True)
+    hacker = User.objects.create_user(email="fake_amenity_owner@example.com", password="Secure123!", is_owner=True)
+    access, _ = generate_tokens(hacker)
+    
+    ptype = PropertyType.objects.create(name="Villa 2")
+    from properties.services import create_property_service
+    prop = create_property_service(
+        user=owner, 
+        property_type_id=ptype.id, 
+        bedrooms=1, 
+        bathrooms=1, 
+        area=50.0, 
+        description="Test", 
+        location_data={"city": "Cairo", "district": "Maadi", "address": "123"}
+    )
+    a1 = Amenity.objects.create(name="Garden")
+    
+    mutation = f"""
+        mutation {{
+          assignPropertyAmenities(input: {{
+            propertyId: "{prop.id}",
+            amenityIds: ["{a1.id}"]
+          }}) {{ id }}
+        }}
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json', HTTP_AUTHORIZATION=f"Bearer {access}")
+    data = response.json()
+    
+    assert "errors" in data
+    assert "cannot modify amenities" in data["errors"][0]["message"]

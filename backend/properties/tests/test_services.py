@@ -1,8 +1,8 @@
 import pytest
 from django.contrib.auth import get_user_model
 from properties.models import PropertyType, Property, Location
-from properties.services import create_property_service, create_listing_service, add_property_media_service, update_property_media_service, delete_property_media_service
-from properties.models import Listing, PropertyMedia
+from properties.services import create_property_service, create_listing_service, add_property_media_service, update_property_media_service, delete_property_media_service, assign_property_amenities_service
+from properties.models import Listing, PropertyMedia, Amenity
 
 User = get_user_model()
 
@@ -157,3 +157,29 @@ def test_delete_property_media_service_success():
     result = delete_property_media_service(owner, media.id)
     assert result is True
     assert PropertyMedia.objects.count() == 0  # Hard delete!
+
+@pytest.mark.django_db
+def test_assign_property_amenities_success():
+    owner = User.objects.create_user(email="amenity_owner@example.com", password="Password123!", is_owner=True)
+    ptype = PropertyType.objects.create(name="Condo")
+    prop = create_property_service(owner, ptype.id, 2, 2, 100.0, "Desc", {"city": "Cairo", "district": "Maadi", "address": "123"})
+    
+    a1 = Amenity.objects.create(name="Pool")
+    a2 = Amenity.objects.create(name="Gym")
+    
+    updated_prop = assign_property_amenities_service(owner, prop.id, [a1.id, a2.id])
+    
+    assert updated_prop.amenities.count() == 2
+    assert a1 in updated_prop.amenities.all()
+
+@pytest.mark.django_db
+def test_assign_property_amenities_idor():
+    owner1 = User.objects.create_user(email="amenity_victim@example.com", password="Password123!", is_owner=True)
+    owner2 = User.objects.create_user(email="amenity_hacker@example.com", password="Password123!", is_owner=True)
+    ptype = PropertyType.objects.create(name="Penthouse")
+    prop = create_property_service(owner1, ptype.id, 2, 2, 100.0, "Desc", {"city": "Cairo", "district": "Maadi", "address": "123"})
+    
+    a1 = Amenity.objects.create(name="Balcony")
+    
+    with pytest.raises(Exception, match="cannot modify amenities for someone else's property"):
+        assign_property_amenities_service(owner2, prop.id, [a1.id])

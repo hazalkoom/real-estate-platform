@@ -56,6 +56,11 @@ class UpdatePropertyMediaInput:
     media_type: str | None = None
     is_primary: bool | None = None
 
+@strawberry.input
+class AssignPropertyAmenitiesInput:
+    property_id: strawberry.ID
+    amenity_ids: list[strawberry.ID]
+
 @strawberry.type
 class Query:
     properties: list[PropertyNode] = strawberry_django.field()
@@ -194,3 +199,16 @@ class Mutation:
         delete_async = sync_to_async(delete_property_media_service, thread_sensitive=True)
         
         return await delete_async(user=request.user, media_id=media_id)
+
+    @strawberry.mutation(permission_classes=[IsOwner])
+    async def assign_property_amenities(self, info: strawberry.Info, input: AssignPropertyAmenitiesInput) -> PropertyNode:
+        from .services import assign_property_amenities_service
+        
+        request = info.context.request
+        assign_async = sync_to_async(assign_property_amenities_service, thread_sensitive=True)
+        
+        return await assign_async(
+            user=request.user,
+            property_id=input.property_id,
+            amenity_ids=input.amenity_ids
+        )
