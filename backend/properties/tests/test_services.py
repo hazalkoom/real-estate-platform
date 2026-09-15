@@ -1,8 +1,8 @@
 import pytest
 from django.contrib.auth import get_user_model
 from properties.models import PropertyType, Property, Location
-from properties.services import create_property_service, create_listing_service, add_property_media_service
-from properties.models import Listing
+from properties.services import create_property_service, create_listing_service, add_property_media_service, update_property_media_service, delete_property_media_service
+from properties.models import Listing, PropertyMedia
 
 User = get_user_model()
 
@@ -125,3 +125,35 @@ def test_add_property_media_service_idor():
     # Owner 2 tries to upload to Owner 1's property
     with pytest.raises(Exception, match="can't add pictures to someone else's property"):
         add_property_media_service(owner2, prop.id, "http://image.com/hacker.jpg", "image", True)
+
+@pytest.mark.django_db
+def test_update_property_media_service_success():
+    owner = User.objects.create_user(email="media_upd@example.com", password="Password123!", is_owner=True)
+    ptype = PropertyType.objects.create(name="Loft")
+    prop = create_property_service(owner, ptype.id, 1, 1, 80.0, "Desc", {"city": "Cairo", "district": "Maadi", "address": "123"})
+    
+    media1 = add_property_media_service(owner, prop.id, "http://image.com/1.jpg", "image", True)
+    media2 = add_property_media_service(owner, prop.id, "http://image.com/2.jpg", "image", False)
+    
+    # Update media2 to be the primary image
+    updated_media = update_property_media_service(owner, media2.id, is_primary=True, url="http://image.com/new.jpg")
+    
+    assert updated_media.url == "http://image.com/new.jpg"
+    assert updated_media.is_primary is True
+    
+    # Prove media1 got demoted
+    media1.refresh_from_db()
+    assert media1.is_primary is False
+
+@pytest.mark.django_db
+def test_delete_property_media_service_success():
+    owner = User.objects.create_user(email="media_del@example.com", password="Password123!", is_owner=True)
+    ptype = PropertyType.objects.create(name="Mansion")
+    prop = create_property_service(owner, ptype.id, 5, 5, 500.0, "Desc", {"city": "Cairo", "district": "Zamalek", "address": "123"})
+    
+    media = add_property_media_service(owner, prop.id, "http://image.com/1.jpg")
+    assert PropertyMedia.objects.count() == 1
+    
+    result = delete_property_media_service(owner, media.id)
+    assert result is True
+    assert PropertyMedia.objects.count() == 0  # Hard delete!

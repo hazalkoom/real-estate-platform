@@ -147,3 +147,43 @@ def add_property_media_service(user, property_id, url, media_type="image", is_pr
         is_primary=is_primary
     )
     return media
+
+def update_property_media_service(user, media_id, **kwargs):
+    """
+    Updates a media record. Handles primary image demotion if is_primary is set to True.
+    """
+    try:
+        media = PropertyMedia.objects.get(id=media_id)
+    except PropertyMedia.DoesNotExist:
+        raise Exception("Media not found. Are you just making up IDs?")
+
+    # IDOR check crossing the relationship
+    if media.property.owner != user:
+        raise Exception("Access denied. You don't own this property's media, ya harami.")
+
+    # If they are promoting this image to primary, demote the others
+    if kwargs.get('is_primary') is True:
+        PropertyMedia.objects.filter(property=media.property, is_primary=True).update(is_primary=False)
+
+    for key, value in kwargs.items():
+        if value is not None:
+            setattr(media, key, value)
+            
+    media.save()
+    return media
+
+def delete_property_media_service(user, media_id):
+    """
+    Hard deletes a media record for a property you own.
+    """
+    try:
+        media = PropertyMedia.objects.get(id=media_id)
+    except PropertyMedia.DoesNotExist:
+        raise Exception("Media not found.")
+
+    if media.property.owner != user:
+        raise Exception("Access denied. You cannot delete this media.")
+
+    # Hard delete because PropertyMedia does not inherit SoftDeleteModel
+    media.delete()
+    return True

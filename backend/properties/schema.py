@@ -35,7 +35,6 @@ class UpdatePropertyInput:
     area: float | None = None
     description: str | None = None
 
-
 @strawberry.input
 class UpdateListingInput:
     listing_id: strawberry.ID
@@ -49,6 +48,13 @@ class AddPropertyMediaInput:
     url: str
     media_type: str = "image"
     is_primary: bool = False
+
+@strawberry.input
+class UpdatePropertyMediaInput:
+    media_id: strawberry.ID
+    url: str | None = None
+    media_type: str | None = None
+    is_primary: bool | None = None
 
 @strawberry.type
 class Query:
@@ -164,3 +170,27 @@ class Mutation:
             media_type=input.media_type,
             is_primary=input.is_primary
         )
+
+    @strawberry.mutation(permission_classes=[IsOwner])
+    async def update_property_media(self, info: strawberry.Info, input: UpdatePropertyMediaInput) -> PropertyMediaNode:
+        from .services import update_property_media_service
+        
+        request = info.context.request
+        update_async = sync_to_async(update_property_media_service, thread_sensitive=True)
+        
+        return await update_async(
+            user=request.user,
+            media_id=input.media_id,
+            url=input.url,
+            media_type=input.media_type,
+            is_primary=input.is_primary
+        )
+
+    @strawberry.mutation(permission_classes=[IsOwner])
+    async def delete_property_media(self, info: strawberry.Info, media_id: strawberry.ID) -> bool:
+        from .services import delete_property_media_service
+        
+        request = info.context.request
+        delete_async = sync_to_async(delete_property_media_service, thread_sensitive=True)
+        
+        return await delete_async(user=request.user, media_id=media_id)

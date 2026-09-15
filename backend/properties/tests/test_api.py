@@ -327,3 +327,57 @@ def test_add_property_media_idor_prevention(client):
     
     assert "errors" in data
     assert "can't add pictures to someone else's property" in data["errors"][0]["message"]
+
+@pytest.mark.django_db
+def test_update_property_media_success(client):
+    owner = User.objects.create_user(email="api_media_upd@example.com", password="Secure123!", is_owner=True)
+    access, _ = generate_tokens(owner)
+    
+    ptype = PropertyType.objects.create(name="Cabin 2")
+    from properties.services import create_property_service, add_property_media_service
+    prop = create_property_service(
+        user=owner, property_type_id=ptype.id, bedrooms=1, bathrooms=1, area=50.0, description="Test",
+        location_data={"city": "Cairo", "district": "Maadi", "address": "123"}
+    )
+    media = add_property_media_service(owner, prop.id, "http://old.com/pic.jpg")
+    
+    mutation = f"""
+        mutation {{
+          updatePropertyMedia(input: {{
+            mediaId: "{media.id}",
+            url: "http://new.com/pic.jpg"
+          }}) {{ id url }}
+        }}
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json', HTTP_AUTHORIZATION=f"Bearer {access}")
+    data = response.json()
+    
+    assert "errors" not in data
+    assert data["data"]["updatePropertyMedia"]["url"] == "http://new.com/pic.jpg"
+
+@pytest.mark.django_db
+def test_delete_property_media_idor_prevention(client):
+    owner1 = User.objects.create_user(email="real_owner_del@example.com", password="Secure123!", is_owner=True)
+    owner2 = User.objects.create_user(email="hacker_del@example.com", password="Secure123!", is_owner=True)
+    access, _ = generate_tokens(owner2)
+    
+    ptype = PropertyType.objects.create(name="Flat 2")
+    from properties.services import create_property_service, add_property_media_service
+    prop = create_property_service(
+        user=owner1, property_type_id=ptype.id, bedrooms=1, bathrooms=1, area=50.0, description="Test",
+        location_data={"city": "Cairo", "district": "Maadi", "address": "123"}
+    )
+    media = add_property_media_service(owner1, prop.id, "http://pic.com/1.jpg")
+    
+    mutation = f"""
+        mutation {{
+          deletePropertyMedia(mediaId: "{media.id}")
+        }}
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json', HTTP_AUTHORIZATION=f"Bearer {access}")
+    data = response.json()
+    
+    assert "errors" in data
+    assert "Access denied" in data["errors"][0]["message"]
