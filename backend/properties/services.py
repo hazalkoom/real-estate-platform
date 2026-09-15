@@ -1,4 +1,4 @@
-from .models import Property, Location, PropertyType, Listing
+from .models import Property, Location, PropertyType, Listing, PropertyMedia
 
 def create_property_service(user, property_type_id, bedrooms, bathrooms, area, description, location_data):
     """
@@ -123,3 +123,27 @@ def delete_listing_service(user, listing_id):
 
     listing.soft_delete()
     return True
+
+def add_property_media_service(user, property_id, url, media_type="image", is_primary=False):
+    """
+    Adds a media URL to a property. Ensures only one primary image exists.
+    """
+    try:
+        prop = Property.objects.get(id=property_id, is_deleted=False)
+    except Property.DoesNotExist:
+        raise Exception("Property not found. Stop guessing IDs.")
+
+    if prop.owner != user:
+        raise Exception("Access denied. You can't add pictures to someone else's property, ya ghabi.")
+
+    # If this new image is the primary one, demote all existing primary images for this property
+    if is_primary:
+        PropertyMedia.objects.filter(property=prop, is_primary=True).update(is_primary=False)
+
+    media = PropertyMedia.objects.create(
+        property=prop,
+        url=url,
+        media_type=media_type,
+        is_primary=is_primary
+    )
+    return media

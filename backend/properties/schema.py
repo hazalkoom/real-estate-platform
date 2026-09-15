@@ -35,12 +35,6 @@ class UpdatePropertyInput:
     area: float | None = None
     description: str | None = None
 
-@strawberry.type
-class Query:
-    properties: list[PropertyNode] = strawberry_django.field()
-    listings: list[ListingNode] = strawberry_django.field()
-    amenities: list[AmenityNode] = strawberry_django.field()
-    property_types: list[PropertyTypeNode] = strawberry_django.field()
 
 @strawberry.input
 class UpdateListingInput:
@@ -48,6 +42,20 @@ class UpdateListingInput:
     listing_type: str | None = None
     status: str | None = None
     price: float | None = None
+
+@strawberry.input
+class AddPropertyMediaInput:
+    property_id: strawberry.ID
+    url: str
+    media_type: str = "image"
+    is_primary: bool = False
+
+@strawberry.type
+class Query:
+    properties: list[PropertyNode] = strawberry_django.field()
+    listings: list[ListingNode] = strawberry_django.field()
+    amenities: list[AmenityNode] = strawberry_django.field()
+    property_types: list[PropertyTypeNode] = strawberry_django.field()
 
 @strawberry.type
 class Mutation:
@@ -141,3 +149,18 @@ class Mutation:
         delete_async = sync_to_async(delete_listing_service, thread_sensitive=True)
         
         return await delete_async(user=request.user, listing_id=listing_id)
+
+    @strawberry.mutation(permission_classes=[IsOwner])
+    async def add_property_media(self, info: strawberry.Info, input: AddPropertyMediaInput) -> PropertyMediaNode:
+        from .services import add_property_media_service
+        
+        request = info.context.request
+        add_async = sync_to_async(add_property_media_service, thread_sensitive=True)
+        
+        return await add_async(
+            user=request.user,
+            property_id=input.property_id,
+            url=input.url,
+            media_type=input.media_type,
+            is_primary=input.is_primary
+        )
