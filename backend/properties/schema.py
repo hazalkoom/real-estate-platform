@@ -1,7 +1,7 @@
 import strawberry
 import strawberry_django
 from asgiref.sync import sync_to_async
-from .types import PropertyNode, ListingNode, AmenityNode, PropertyTypeNode
+from .types import PropertyNode, ListingNode, AmenityNode, PropertyTypeNode, PropertyMediaNode
 from users.permissions import IsOwner, IsAgent
 
 @strawberry.input

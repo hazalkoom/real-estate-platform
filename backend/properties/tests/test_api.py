@@ -267,3 +267,63 @@ def test_delete_listing_idor_prevention(client):
     
     assert "errors" in data
     assert "cannot delete another agent's listing" in data["errors"][0]["message"]
+
+@pytest.mark.django_db
+def test_add_property_media_success(client):
+    owner = User.objects.create_user(email="api_media@example.com", password="Secure123!", is_owner=True)
+    access, _ = generate_tokens(owner)
+    
+    ptype = PropertyType.objects.create(name="Cabin")
+    from properties.services import create_property_service
+    prop = create_property_service(
+        user=owner, property_type_id=ptype.id, bedrooms=1, bathrooms=1, area=50.0, description="Test",
+        location_data={"city": "Cairo", "district": "Maadi", "address": "123"}
+    )
+    
+    mutation = f"""
+        mutation {{
+          addPropertyMedia(input: {{
+            propertyId: "{prop.id}",
+            url: "https://mybucket.com/house.jpg",
+            isPrimary: true
+          }}) {{ id url isPrimary }}
+        }}
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json', HTTP_AUTHORIZATION=f"Bearer {access}")
+    data = response.json()
+    
+    assert "errors" not in data
+    assert data["data"]["addPropertyMedia"]["url"] == "https://mybucket.com/house.jpg"
+    assert data["data"]["addPropertyMedia"]["isPrimary"] is True
+
+@pytest.mark.django_db
+def test_add_property_media_idor_prevention(client):
+    owner1 = User.objects.create_user(email="real_media_owner@example.com", password="Secure123!", is_owner=True)
+    owner2 = User.objects.create_user(email="fake_media_owner@example.com", password="Secure123!", is_owner=True)
+    
+    # Authenticate as the FAKE owner
+    access, _ = generate_tokens(owner2)
+    
+    ptype = PropertyType.objects.create(name="Flat")
+    from properties.services import create_property_service
+    prop = create_property_service(
+        user=owner1, property_type_id=ptype.id, bedrooms=1, bathrooms=1, area=50.0, description="Test",
+        location_data={"city": "Cairo", "district": "Maadi", "address": "123"}
+    )
+    
+    mutation = f"""
+        mutation {{
+          addPropertyMedia(input: {{
+            propertyId: "{prop.id}",
+            url: "https://mybucket.com/hacker.jpg",
+            isPrimary: true
+          }}) {{ id }}
+        }}
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json', HTTP_AUTHORIZATION=f"Bearer {access}")
+    data = response.json()
+    
+    assert "errors" in data
+    assert "can't add pictures to someone else's property" in data["errors"][0]["message"]
