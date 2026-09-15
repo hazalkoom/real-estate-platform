@@ -2,7 +2,7 @@ import strawberry
 import strawberry_django
 from asgiref.sync import sync_to_async
 from .types import PropertyNode, ListingNode, AmenityNode, PropertyTypeNode
-from users.permissions import IsOwner
+from users.permissions import IsOwner, IsAgent
 
 @strawberry.input
 class LocationInput:
@@ -20,6 +20,12 @@ class PropertyInput:
     area: float
     description: str
     location: LocationInput
+
+@strawberry.input
+class ListingInput:
+    property_id: strawberry.ID
+    listing_type: str
+    price: float
 
 @strawberry.type
 class Query:
@@ -55,4 +61,18 @@ class Mutation:
             area=input.area,
             description=input.description,
             location_data=location_dict
+        )
+
+    @strawberry.mutation(permission_classes=[IsAgent])
+    async def create_listing(self, info: strawberry.Info, input: ListingInput) -> ListingNode:
+        from .services import create_listing_service
+        
+        request = info.context.request
+        
+        create_async = sync_to_async(create_listing_service, thread_sensitive=True)
+        return await create_async(
+            agent=request.user,  # Injected securely by the IsAgent guard
+            property_id=input.property_id,
+            listing_type=input.listing_type,
+            price=input.price
         )

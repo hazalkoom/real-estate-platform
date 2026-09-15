@@ -1,4 +1,4 @@
-from .models import Property, Location, PropertyType
+from .models import Property, Location, PropertyType, Listing
 
 def create_property_service(user, property_type_id, bedrooms, bathrooms, area, description, location_data):
     """
@@ -24,3 +24,31 @@ def create_property_service(user, property_type_id, bedrooms, bathrooms, area, d
         description=description
     )
     return property_obj
+
+def create_listing_service(agent, property_id, listing_type, price):
+    """
+    Creates a new listing for a property, assigned to the authenticated agent.
+    """
+    # Grab the property
+    try:
+        prop = Property.objects.get(id=property_id)
+    except Property.DoesNotExist:
+        raise Exception("Property not found. Are you hallucinating IDs?")
+
+    # Check if the property already has a listing to prevent OneToOne constraint crashes
+    if hasattr(prop, 'listing'):
+        raise Exception("This property is already listed, ya ghabi.")
+
+    # Validate listing type
+    if listing_type not in [Listing.ListingType.SALE, Listing.ListingType.RENT]:
+        raise Exception("Listing type must be 'SALE' or 'RENT'.")
+
+    listing = Listing.objects.create(
+        property=prop,
+        agent=agent,
+        listing_type=listing_type,
+        price=price,
+        status=Listing.ListingStatus.ACTIVE  # Default to active when created
+    )
+    
+    return listing
