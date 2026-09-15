@@ -42,6 +42,13 @@ class Query:
     amenities: list[AmenityNode] = strawberry_django.field()
     property_types: list[PropertyTypeNode] = strawberry_django.field()
 
+@strawberry.input
+class UpdateListingInput:
+    listing_id: strawberry.ID
+    listing_type: str | None = None
+    status: str | None = None
+    price: float | None = None
+
 @strawberry.type
 class Mutation:
     
@@ -110,3 +117,27 @@ class Mutation:
         delete_async = sync_to_async(delete_property_service, thread_sensitive=True)
         
         return await delete_async(user=request.user, property_id=property_id)
+
+    @strawberry.mutation(permission_classes=[IsAgent])
+    async def update_listing(self, info: strawberry.Info, input: UpdateListingInput) -> ListingNode:
+        from .services import update_listing_service
+        
+        request = info.context.request
+        update_async = sync_to_async(update_listing_service, thread_sensitive=True)
+        
+        return await update_async(
+            user=request.user,
+            listing_id=input.listing_id,
+            listing_type=input.listing_type,
+            status=input.status,
+            price=input.price
+        )
+
+    @strawberry.mutation(permission_classes=[IsAgent])
+    async def delete_listing(self, info: strawberry.Info, listing_id: strawberry.ID) -> bool:
+        from .services import delete_listing_service
+        
+        request = info.context.request
+        delete_async = sync_to_async(delete_listing_service, thread_sensitive=True)
+        
+        return await delete_async(user=request.user, listing_id=listing_id)

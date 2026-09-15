@@ -89,3 +89,37 @@ def delete_property_service(user, property_id):
     # We use the soft_delete method you inherited from SoftDeleteModel
     prop.soft_delete()
     return True
+
+def update_listing_service(user, listing_id, **kwargs):
+    """
+    Updates a listing, but only if the authenticated user is the assigned agent.
+    """
+    try:
+        listing = Listing.objects.get(id=listing_id, is_deleted=False)
+    except Listing.DoesNotExist:
+        raise Exception("Listing not found or has been deleted.")
+
+    if listing.agent != user:
+        raise Exception("Access denied. You are not the agent for this listing, ya harami.")
+
+    for key, value in kwargs.items():
+        if value is not None:
+            setattr(listing, key, value)
+            
+    listing.save()
+    return listing
+
+def delete_listing_service(user, listing_id):
+    """
+    Soft deletes a listing, but only if the authenticated user is the assigned agent.
+    """
+    try:
+        listing = Listing.objects.get(id=listing_id, is_deleted=False)
+    except Listing.DoesNotExist:
+        raise Exception("Listing not found or already deleted.")
+
+    if listing.agent != user:
+        raise Exception("Access denied. You cannot delete another agent's listing.")
+
+    listing.soft_delete()
+    return True

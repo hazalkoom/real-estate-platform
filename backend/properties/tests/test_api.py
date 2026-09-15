@@ -203,3 +203,67 @@ def test_delete_property_idor_prevention(client):
     # Prove it wasn't deleted
     prop.refresh_from_db()
     assert prop.is_deleted is False
+
+@pytest.mark.django_db
+def test_update_listing_success(client):
+    owner = User.objects.create_user(email="list_owner2@example.com", password="Secure123!", is_owner=True)
+    agent = User.objects.create_user(email="list_updater@example.com", password="Secure123!", is_agent=True)
+    access, _ = generate_tokens(agent)
+    
+    ptype = PropertyType.objects.create(name="Villa")
+    from properties.services import create_property_service, create_listing_service
+    prop = create_property_service(
+        user=owner, property_type_id=ptype.id, bedrooms=3, bathrooms=2, area=200.0, description="Test",
+        location_data={"city": "Cairo", "district": "Zamalek", "address": "123"}
+    )
+    listing = create_listing_service(agent=agent, property_id=prop.id, listing_type="SALE", price=5000000.00)
+    
+    mutation = f"""
+        mutation {{
+          updateListing(input: {{
+            listingId: "{listing.id}",
+            price: 4500000.00,
+            status: "PENDING"
+          }}) {{ id price status }}
+        }}
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json', HTTP_AUTHORIZATION=f"Bearer {access}")
+    data = response.json()
+    
+    assert "errors" not in data
+    # Cast to float because GraphQL serializes Decimals to Strings!
+    assert float(data["data"]["updateListing"]["price"]) == 4500000.00
+    assert data["data"]["updateListing"]["status"] == "PENDING"
+
+@pytest.mark.django_db
+def test_delete_listing_idor_prevention(client):
+    owner = User.objects.create_user(email="list_owner3@example.com", password="Secure123!", is_owner=True)
+    agent1 = User.objects.create_user(email="good_agent@example.com", password="Secure123!", is_agent=True)
+    agent2 = User.objects.create_user(email="bad_agent@example.com", password="Secure123!", is_agent=True)
+    
+    # Authenticate as the BAD agent
+    access, _ = generate_tokens(agent2)
+    
+    ptype = PropertyType.objects.create(name="Apartment")
+    from properties.services import create_property_service, create_listing_service
+    prop = create_property_service(
+        user=owner, property_type_id=ptype.id, bedrooms=1, bathrooms=1, area=50.0, description="Test",
+        location_data={"city": "Cairo", "district": "Maadi", "address": "123"}
+    )
+    
+    # Agent 1 creates the listing
+    listing = create_listing_service(agent=agent1, property_id=prop.id, listing_type="RENT", price=10000.00)
+    
+    # Agent 2 tries to delete Agent 1's listing
+    mutation = f"""
+        mutation {{
+          deleteListing(listingId: "{listing.id}")
+        }}
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json', HTTP_AUTHORIZATION=f"Bearer {access}")
+    data = response.json()
+    
+    assert "errors" in data
+    assert "cannot delete another agent's listing" in data["errors"][0]["message"]
