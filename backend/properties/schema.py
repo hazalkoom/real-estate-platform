@@ -27,6 +27,14 @@ class ListingInput:
     listing_type: str
     price: float
 
+@strawberry.input
+class UpdatePropertyInput:
+    property_id: strawberry.ID
+    bedrooms: int | None = None
+    bathrooms: int | None = None
+    area: float | None = None
+    description: str | None = None
+
 @strawberry.type
 class Query:
     properties: list[PropertyNode] = strawberry_django.field()
@@ -76,3 +84,29 @@ class Mutation:
             listing_type=input.listing_type,
             price=input.price
         )
+
+    @strawberry.mutation(permission_classes=[IsOwner])
+    async def update_property(self, info: strawberry.Info, input: UpdatePropertyInput) -> PropertyNode:
+        from .services import update_property_service
+        
+        request = info.context.request
+        update_async = sync_to_async(update_property_service, thread_sensitive=True)
+        
+        # We pass the input fields as kwargs. Strawberry unwraps them nicely.
+        return await update_async(
+            user=request.user,
+            property_id=input.property_id,
+            bedrooms=input.bedrooms,
+            bathrooms=input.bathrooms,
+            area=input.area,
+            description=input.description
+        )
+
+    @strawberry.mutation(permission_classes=[IsOwner])
+    async def delete_property(self, info: strawberry.Info, property_id: strawberry.ID) -> bool:
+        from .services import delete_property_service
+        
+        request = info.context.request
+        delete_async = sync_to_async(delete_property_service, thread_sensitive=True)
+        
+        return await delete_async(user=request.user, property_id=property_id)

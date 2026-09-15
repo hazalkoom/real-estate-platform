@@ -139,3 +139,67 @@ def test_create_listing_rejected_as_owner(client):
     
     assert "errors" in data
     assert "restricted to Real Estate Agents" in data["errors"][0]["message"]
+
+
+@pytest.mark.django_db
+def test_update_property_success(client):
+    owner = User.objects.create_user(email="updater@example.com", password="Secure123!", is_owner=True)
+    access, _ = generate_tokens(owner)
+    
+    ptype = PropertyType.objects.create(name="Duplex")
+    from properties.services import create_property_service
+    prop = create_property_service(
+        user=owner, property_type_id=ptype.id, bedrooms=2, bathrooms=2, area=150.0, description="Old desc",
+        location_data={"city": "Cairo", "district": "Zamalek", "address": "123 Street"}
+    )
+    
+    mutation = f"""
+        mutation {{
+          updateProperty(input: {{
+            propertyId: "{prop.id}",
+            description: "Brand new description!"
+          }}) {{ id description area }}
+        }}
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json', HTTP_AUTHORIZATION=f"Bearer {access}")
+    data = response.json()
+    
+    assert "errors" not in data
+    # Description updated, but area should remain the same
+    assert data["data"]["updateProperty"]["description"] == "Brand new description!"
+    assert float(data["data"]["updateProperty"]["area"]) == 150.0
+
+@pytest.mark.django_db
+def test_delete_property_idor_prevention(client):
+    owner1 = User.objects.create_user(email="victim@example.com", password="Secure123!", is_owner=True)
+    owner2 = User.objects.create_user(email="hacker@example.com", password="Secure123!", is_owner=True)
+    
+    # Authenticate as owner2 (the hacker)
+    access, _ = generate_tokens(owner2)
+    
+    ptype = PropertyType.objects.create(name="Chalet")
+    from properties.services import create_property_service
+    
+    # Property belongs to owner1
+    prop = create_property_service(
+        user=owner1, property_type_id=ptype.id, bedrooms=1, bathrooms=1, area=50.0, description="Nice",
+        location_data={"city": "Alex", "district": "Gleem", "address": "Sea"}
+    )
+    
+    # Hacker tries to delete Victim's property
+    mutation = f"""
+        mutation {{
+          deleteProperty(propertyId: "{prop.id}")
+        }}
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json', HTTP_AUTHORIZATION=f"Bearer {access}")
+    data = response.json()
+    
+    assert "errors" in data
+    assert "cannot delete someone else's property" in data["errors"][0]["message"]
+    
+    # Prove it wasn't deleted
+    prop.refresh_from_db()
+    assert prop.is_deleted is False

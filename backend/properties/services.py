@@ -52,3 +52,40 @@ def create_listing_service(agent, property_id, listing_type, price):
     )
     
     return listing
+
+def update_property_service(user, property_id, **kwargs):
+    """
+    Updates a property, but only if the authenticated user actually owns it.
+    """
+    try:
+        prop = Property.objects.get(id=property_id, is_deleted=False)
+    except Property.DoesNotExist:
+        raise Exception("Property not found or has been deleted.")
+
+    # Object-level permission check (Prevent IDOR)
+    if prop.owner != user:
+        raise Exception("Access denied. You do not own this property, ya harami.")
+
+    # Update only the fields provided
+    for key, value in kwargs.items():
+        if value is not None:
+            setattr(prop, key, value)
+            
+    prop.save()
+    return prop
+
+def delete_property_service(user, property_id):
+    """
+    Soft deletes a property, but only if the authenticated user owns it.
+    """
+    try:
+        prop = Property.objects.get(id=property_id, is_deleted=False)
+    except Property.DoesNotExist:
+        raise Exception("Property not found or already deleted.")
+
+    if prop.owner != user:
+        raise Exception("Access denied. You cannot delete someone else's property.")
+
+    # We use the soft_delete method you inherited from SoftDeleteModel
+    prop.soft_delete()
+    return True
