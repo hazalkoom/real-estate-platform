@@ -3,6 +3,7 @@ from users.auth import generate_tokens
 from django.contrib.auth import get_user_model
 from properties.models import PropertyType
 from properties.models import Listing, Amenity
+from properties.services import create_property_service, create_listing_service
 
 User = get_user_model()
 
@@ -453,3 +454,69 @@ def test_assign_property_amenities_idor(client):
     
     assert "errors" in data
     assert "cannot modify amenities" in data["errors"][0]["message"]
+
+@pytest.mark.django_db
+def test_search_properties_api(client):
+    owner = User.objects.create_user(email="api_search@example.com", password="Secure123!", is_owner=True)
+    ptype = PropertyType.objects.create(name="Chalet Search")
+    
+    from properties.services import create_property_service
+    create_property_service(owner, ptype.id, 2, 1, 100.0, "Small", {"city": "Giza", "district": "Dokki", "address": "1"})
+    create_property_service(owner, ptype.id, 6, 4, 500.0, "Big", {"city": "Giza", "district": "Zayed", "address": "2"})
+    
+    query = """
+        query {
+          searchProperties(city: "Giza", minBedrooms: 4) {
+            id
+            bedrooms
+            area
+            location { city }
+          }
+        }
+    """
+    
+    # Notice we don't need HTTP_AUTHORIZATION here. Searching is public.
+    response = client.post('/graphql/', {'query': query}, content_type='application/json')
+    data = response.json()
+    
+    assert "errors" not in data
+    results = data["data"]["searchProperties"]
+    
+    # Should only return the "Big" property in Zayed
+    assert len(results) == 1
+    assert results[0]["bedrooms"] == 6
+
+@pytest.mark.django_db
+def test_search_listings_api(client):
+    owner = User.objects.create_user(email="api_list_search@example.com", password="Secure123!", is_owner=True)
+    agent = User.objects.create_user(email="api_list_agent@example.com", password="Secure123!", is_agent=True)
+    ptype = PropertyType.objects.create(name="Chalet List Search")
+    
+    
+    prop = create_property_service(owner, ptype.id, 2, 1, 100.0, "Small", {"city": "Giza", "district": "Dokki", "address": "1"})
+    create_listing_service(agent, prop.id, "SALE", 5000000.0)
+    
+    query = """
+        query {
+          searchListings(city: "Giza", maxPrice: 6000000.0) {
+            id
+            price
+            listingType
+            property {
+              bedrooms
+              location { city }
+            }
+          }
+        }
+    """
+    
+    # Unauthenticated users can search listings
+    response = client.post('/graphql/', {'query': query}, content_type='application/json')
+    data = response.json()
+    
+    assert "errors" not in data
+    results = data["data"]["searchListings"]
+    
+    assert len(results) == 1
+    assert float(results[0]["price"]) == 5000000.0
+    assert results[0]["property"]["location"]["city"] == "Giza"

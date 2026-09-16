@@ -3,6 +3,8 @@ import strawberry_django
 from asgiref.sync import sync_to_async
 from .types import PropertyNode, ListingNode, AmenityNode, PropertyTypeNode, PropertyMediaNode
 from users.permissions import IsOwner, IsAgent
+from .services import search_properties_service, search_listings_service
+
 
 @strawberry.input
 class LocationInput:
@@ -67,6 +69,59 @@ class Query:
     listings: list[ListingNode] = strawberry_django.field()
     amenities: list[AmenityNode] = strawberry_django.field()
     property_types: list[PropertyTypeNode] = strawberry_django.field()
+
+    @strawberry.field
+    async def search_properties(
+        self,
+        city: str | None = None,
+        district: str | None = None,
+        min_bedrooms: int | None = None,
+        max_bedrooms: int | None = None,
+        min_area: float | None = None,
+        max_area: float | None = None,
+        property_type_id: strawberry.ID | None = None,
+        limit: int = 20,
+        offset: int = 0
+    ) -> list[PropertyNode]:
+
+        # Call the pure Python service (this doesn't hit the DB yet)
+        qs = search_properties_service(
+            city=city, district=district,
+            min_bedrooms=min_bedrooms, max_bedrooms=max_bedrooms,
+            min_area=min_area, max_area=max_area,
+            property_type_id=property_type_id
+        )
+        
+        # Safely evaluate the queryset in an async context
+        evaluate_qs = sync_to_async(list, thread_sensitive=True)
+        return await evaluate_qs(qs[offset : offset + limit])
+
+    @strawberry.field
+    async def search_listings(
+        self,
+        listing_type: str | None = None,
+        min_price: float | None = None,
+        max_price: float | None = None,
+        city: str | None = None,
+        district: str | None = None,
+        min_bedrooms: int | None = None,
+        max_bedrooms: int | None = None,
+        property_type_id: strawberry.ID | None = None,
+        limit: int = 20,
+        offset: int = 0
+    ) -> list[ListingNode]:
+        
+        qs = search_listings_service(
+            listing_type=listing_type,
+            min_price=min_price, max_price=max_price,
+            city=city, district=district,
+            min_bedrooms=min_bedrooms, max_bedrooms=max_bedrooms,
+            property_type_id=property_type_id
+        )
+        
+        # Safely evaluate the queryset in an async context
+        evaluate_qs = sync_to_async(list, thread_sensitive=True)
+        return await evaluate_qs(qs[offset : offset + limit])
 
 @strawberry.type
 class Mutation:

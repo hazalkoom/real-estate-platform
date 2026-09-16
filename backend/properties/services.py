@@ -1,4 +1,4 @@
-from .models import Property, Location, PropertyType, Listing, PropertyMedia
+from .models import Property, Location, PropertyType, Listing, PropertyMedia, Amenity
 
 def create_property_service(user, property_type_id, bedrooms, bathrooms, area, description, location_data):
     """
@@ -203,3 +203,75 @@ def assign_property_amenities_service(user, property_id, amenity_ids):
     # Django's .set() automatically handles clearing old relationships and adding new ones
     prop.amenities.set(amenity_ids)
     return prop
+
+def search_properties_service(
+    city=None, district=None, min_bedrooms=None, max_bedrooms=None,
+    min_area=None, max_area=None, property_type_id=None
+):
+    """
+    Searches properties based on advanced filters.
+    Returns a Django QuerySet so the caller can paginate it.
+    """
+    # Start with all non-deleted properties
+    qs = Property.objects.filter(is_deleted=False)
+    
+    # Text-based location filters (case-insensitive)
+    if city:
+        qs = qs.filter(location__city__icontains=city)
+    if district:
+        qs = qs.filter(location__district__icontains=district)
+        
+    # Numeric range filters
+    if min_bedrooms is not None:
+        qs = qs.filter(bedrooms__gte=min_bedrooms)
+    if max_bedrooms is not None:
+        qs = qs.filter(bedrooms__lte=max_bedrooms)
+    if min_area is not None:
+        qs = qs.filter(area__gte=min_area)
+    if max_area is not None:
+        qs = qs.filter(area__lte=max_area)
+        
+    # Exact relational filter
+    if property_type_id:
+        qs = qs.filter(property_type_id=property_type_id)
+        
+    # Default ordering is required for consistent pagination
+    return qs.order_by('-created_at')
+
+def search_listings_service(
+    listing_type=None, min_price=None, max_price=None,
+    city=None, district=None, min_bedrooms=None, max_bedrooms=None,
+    property_type_id=None
+):
+    """
+    Advanced search for ACTIVE listings joining Property attributes.
+    Uses select_related to prevent N+1 query performance issues.
+    """
+    # Base query: only active listings for non-deleted properties
+    qs = Listing.objects.filter(
+        status=Listing.ListingStatus.ACTIVE,
+        is_deleted=False,
+        property__is_deleted=False
+    ).select_related('property', 'property__location', 'property__property_type')
+    
+    # Listing specific filters
+    if listing_type:
+        qs = qs.filter(listing_type=listing_type)
+    if min_price is not None:
+        qs = qs.filter(price__gte=min_price)
+    if max_price is not None:
+        qs = qs.filter(price__lte=max_price)
+        
+    # Property specific filters (joining across the relationship)
+    if city:
+        qs = qs.filter(property__location__city__icontains=city)
+    if district:
+        qs = qs.filter(property__location__district__icontains=district)
+    if min_bedrooms is not None:
+        qs = qs.filter(property__bedrooms__gte=min_bedrooms)
+    if max_bedrooms is not None:
+        qs = qs.filter(property__bedrooms__lte=max_bedrooms)
+    if property_type_id:
+        qs = qs.filter(property__property_type_id=property_type_id)
+        
+    return qs.order_by('-created_at')
