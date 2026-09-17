@@ -65,10 +65,10 @@ class AssignPropertyAmenitiesInput:
 
 @strawberry.type
 class Query:
-    properties: list[PropertyNode] = strawberry_django.field()
-    listings: list[ListingNode] = strawberry_django.field()
-    amenities: list[AmenityNode] = strawberry_django.field()
-    property_types: list[PropertyTypeNode] = strawberry_django.field()
+    properties: list[PropertyNode] = strawberry_django.field(pagination=True)
+    listings: list[ListingNode] = strawberry_django.field(pagination=True)
+    amenities: list[AmenityNode] = strawberry_django.field(pagination=True)
+    property_types: list[PropertyTypeNode] = strawberry_django.field(pagination=True)
 
     @strawberry.field
     async def search_properties(
