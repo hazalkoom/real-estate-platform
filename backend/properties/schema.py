@@ -3,7 +3,7 @@ import strawberry_django
 from asgiref.sync import sync_to_async
 from .types import PropertyNode, ListingNode, AmenityNode, PropertyTypeNode, PropertyMediaNode
 from users.permissions import IsOwner, IsAgent
-from .services import search_properties_service, search_listings_service
+from .services import search_properties_service, search_listings_service, create_amenity_service, create_property_type_service
 
 
 @strawberry.input
@@ -65,6 +65,8 @@ class AssignPropertyAmenitiesInput:
 
 @strawberry.type
 class Query:
+    property: PropertyNode = strawberry_django.field()
+    listing: ListingNode = strawberry_django.field()
     properties: list[PropertyNode] = strawberry_django.field(pagination=True)
     listings: list[ListingNode] = strawberry_django.field(pagination=True)
     amenities: list[AmenityNode] = strawberry_django.field(pagination=True)
@@ -267,3 +269,24 @@ class Mutation:
             property_id=input.property_id,
             amenity_ids=input.amenity_ids
         )
+
+    @strawberry.mutation
+    async def create_property_type(self, info: strawberry.Info, name: str) -> PropertyTypeNode:
+        request = info.context.request
+        
+        if not request.user.is_authenticated:
+            raise Exception("Authentication required.")
+            
+        create_async = sync_to_async(create_property_type_service, thread_sensitive=True)
+        return await create_async(user=request.user, name=name)
+
+    @strawberry.mutation
+    async def create_amenity(self, info: strawberry.Info, name: str) -> AmenityNode:
+
+        request = info.context.request
+        
+        if not request.user.is_authenticated:
+            raise Exception("Authentication required.")
+            
+        create_async = sync_to_async(create_amenity_service, thread_sensitive=True)
+        return await create_async(user=request.user, name=name)

@@ -520,3 +520,64 @@ def test_search_listings_api(client):
     assert len(results) == 1
     assert float(results[0]["price"]) == 5000000.0
     assert results[0]["property"]["location"]["city"] == "Giza"
+
+@pytest.mark.django_db
+def test_single_item_fetching(client):
+    owner = User.objects.create_user(email="single_owner@example.com", password="Secure123!", is_owner=True)
+    agent = User.objects.create_user(email="single_agent@example.com", password="Secure123!", is_agent=True)
+    ptype = PropertyType.objects.create(name="Single Test Type")
+    
+    from properties.services import create_property_service, create_listing_service
+    prop = create_property_service(owner, ptype.id, 2, 2, 150.0, "Desc", {"city": "Cairo", "district": "Maadi", "address": "1"})
+    listing = create_listing_service(agent, prop.id, "SALE", 3000000.0)
+    
+    query = f"""
+        query {{
+          listing(pk: "{listing.id}") {{
+            id
+            price
+            property {{ bedrooms }}
+          }}
+        }}
+    """
+    
+    response = client.post('/graphql/', {'query': query}, content_type='application/json')
+    data = response.json()
+    
+    assert "errors" not in data
+    assert float(data["data"]["listing"]["price"]) == 3000000.0
+
+@pytest.mark.django_db
+def test_admin_mutations_success(client):
+    # Create an admin user
+    admin = User.objects.create_user(email="admin@example.com", password="Secure123!", is_superuser=True, is_staff=True)
+    access, _ = generate_tokens(admin)
+    
+    mutation = """
+        mutation {
+          createAmenity(name: "Jacuzzi") { id name }
+        }
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json', HTTP_AUTHORIZATION=f"Bearer {access}")
+    data = response.json()
+    
+    assert "errors" not in data
+    assert data["data"]["createAmenity"]["name"] == "Jacuzzi"
+
+@pytest.mark.django_db
+def test_admin_mutations_rejected_for_normal_users(client):
+    hacker = User.objects.create_user(email="hacker_admin@example.com", password="Secure123!", is_owner=True)
+    access, _ = generate_tokens(hacker)
+    
+    mutation = """
+        mutation {
+          createPropertyType(name: "Penthouse") { id name }
+        }
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json', HTTP_AUTHORIZATION=f"Bearer {access}")
+    data = response.json()
+    
+    assert "errors" in data
+    assert "Only admins can create property types" in data["errors"][0]["message"]

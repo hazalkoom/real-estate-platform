@@ -275,3 +275,13 @@ def search_listings_service(
         qs = qs.filter(property__property_type_id=property_type_id)
         
     return qs.order_by('-created_at')
+
+def create_property_type_service(user, name):
+    if not user.is_staff and not user.is_superuser:
+        raise Exception("Access denied. Only admins can create property types, ya harami.")
+    return PropertyType.objects.create(name=name)
+
+def create_amenity_service(user, name):
+    if not user.is_staff and not user.is_superuser:
+        raise Exception("Access denied. Only admins can create amenities.")
+    return Amenity.objects.create(name=name)
