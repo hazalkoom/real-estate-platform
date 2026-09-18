@@ -291,3 +291,70 @@ def test_confirm_password_reset_invalid_token(client):
     
     assert "errors" in data
     assert "invalid or expired" in data["errors"][0]["message"]
+
+
+@pytest.mark.django_db
+def test_me_query_authenticated(client):
+    user = User.objects.create_user(email="me_test@example.com", password="SecurePassword123!")
+    access, _ = generate_tokens(user)
+
+    query = """
+        query {
+          me {
+            email
+            isOwner
+            isAgent
+          }
+        }
+    """
+    response = client.post(
+        '/graphql/',
+        {'query': query},
+        content_type='application/json',
+        HTTP_AUTHORIZATION=f"Bearer {access}"
+    )
+    data = response.json()
+
+    assert "errors" not in data
+    assert data["data"]["me"]["email"] == "me_test@example.com"
+
+
+@pytest.mark.django_db
+def test_me_query_unauthenticated(client):
+    query = """
+        query {
+          me {
+            email
+          }
+        }
+    """
+    response = client.post('/graphql/', {'query': query}, content_type='application/json')
+    data = response.json()
+
+    assert "errors" in data
+    assert "You must be logged in" in data["errors"][0]["message"]
+
+
+@pytest.mark.django_db
+def test_jwt_middleware_invalid_and_inactive_tokens(client):
+    query = "{ me { email } }"
+
+    # Invalid token format
+    res_bad = client.post(
+        '/graphql/',
+        {'query': query},
+        content_type='application/json',
+        HTTP_AUTHORIZATION="Bearer totally.invalid.jwt"
+    )
+    assert "errors" in res_bad.json()
+
+    # Inactive user token
+    inactive_user = User.objects.create_user(email="inactive_jwt@example.com", password="Password123!", is_active=False)
+    access_inactive, _ = generate_tokens(inactive_user)
+    res_inactive = client.post(
+        '/graphql/',
+        {'query': query},
+        content_type='application/json',
+        HTTP_AUTHORIZATION=f"Bearer {access_inactive}"
+    )
+    assert "errors" in res_inactive.json()

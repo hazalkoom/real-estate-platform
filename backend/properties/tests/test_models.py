@@ -45,3 +45,22 @@ def test_listing_creation():
     assert listing.price == 1500000.00
     assert listing.agent == agent
     assert str(listing) == f"SALE - {property_obj} - ACTIVE"
+
+
+@pytest.mark.django_db
+def test_all_property_model_str_representations():
+    from properties.models import Amenity, PropertyMedia
+
+    prop_type = PropertyTypeFactory(name="Chalet Str")
+    assert str(prop_type) == "Chalet Str"
+
+    amenity = Amenity.objects.create(name="Sauna")
+    assert str(amenity) == "Sauna"
+
+    location = LocationFactory(city="Cairo", address="Nile St")
+    assert str(location) == "Nile St, Cairo"
+
+    user = UserFactory()
+    prop = PropertyFactory(owner=user, property_type=prop_type, location=location)
+    media = PropertyMedia.objects.create(property=prop, url="http://example.com/1.jpg")
+    assert str(media) == f"Media for {prop.id}"

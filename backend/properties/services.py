@@ -33,11 +33,11 @@ def create_listing_service(agent, property_id, listing_type, price):
     try:
         prop = Property.objects.get(id=property_id)
     except Property.DoesNotExist:
-        raise Exception("Property not found. Are you hallucinating IDs?")
+        raise Exception("Property not found.")
 
     # Check if the property already has a listing to prevent OneToOne constraint crashes
     if hasattr(prop, 'listing'):
-        raise Exception("This property is already listed, ya ghabi.")
+        raise Exception("This property is already listed.")
 
     # Validate listing type
     if listing_type not in [Listing.ListingType.SALE, Listing.ListingType.RENT]:
@@ -64,7 +64,7 @@ def update_property_service(user, property_id, **kwargs):
 
     # Object-level permission check (Prevent IDOR)
     if prop.owner != user:
-        raise Exception("Access denied. You do not own this property, ya harami.")
+        raise Exception("Access denied. You do not own this property.")
 
     # Update only the fields provided
     for key, value in kwargs.items():
@@ -100,7 +100,7 @@ def update_listing_service(user, listing_id, **kwargs):
         raise Exception("Listing not found or has been deleted.")
 
     if listing.agent != user:
-        raise Exception("Access denied. You are not the agent for this listing, ya harami.")
+        raise Exception("Access denied. You are not the agent for this listing.")
 
     for key, value in kwargs.items():
         if value is not None:
@@ -131,10 +131,10 @@ def add_property_media_service(user, property_id, url, media_type="image", is_pr
     try:
         prop = Property.objects.get(id=property_id, is_deleted=False)
     except Property.DoesNotExist:
-        raise Exception("Property not found. Stop guessing IDs.")
+        raise Exception("Property not found.")
 
     if prop.owner != user:
-        raise Exception("Access denied. You can't add pictures to someone else's property, ya ghabi.")
+        raise Exception("Access denied. You cannot add pictures to someone else's property.")
 
     # If this new image is the primary one, demote all existing primary images for this property
     if is_primary:
@@ -155,11 +155,11 @@ def update_property_media_service(user, media_id, **kwargs):
     try:
         media = PropertyMedia.objects.get(id=media_id)
     except PropertyMedia.DoesNotExist:
-        raise Exception("Media not found. Are you just making up IDs?")
+        raise Exception("Media not found.")
 
     # IDOR check crossing the relationship
     if media.property.owner != user:
-        raise Exception("Access denied. You don't own this property's media, ya harami.")
+        raise Exception("Access denied. You do not own this property's media.")
 
     # If they are promoting this image to primary, demote the others
     if kwargs.get('is_primary') is True:
@@ -195,10 +195,10 @@ def assign_property_amenities_service(user, property_id, amenity_ids):
     try:
         prop = Property.objects.get(id=property_id, is_deleted=False)
     except Property.DoesNotExist:
-        raise Exception("Property not found. Stop hallucinating.")
+        raise Exception("Property not found.")
 
     if prop.owner != user:
-        raise Exception("Access denied. You cannot modify amenities for someone else's property, ya harami.")
+        raise Exception("Access denied. You cannot modify amenities for someone else's property.")
 
     # Django's .set() automatically handles clearing old relationships and adding new ones
     prop.amenities.set(amenity_ids)
@@ -210,10 +210,12 @@ def search_properties_service(
 ):
     """
     Searches properties based on advanced filters.
-    Returns a Django QuerySet so the caller can paginate it.
+    Returns a Django QuerySet with prefetching to avoid N+1 queries.
     """
-    # Start with all non-deleted properties
-    qs = Property.objects.filter(is_deleted=False)
+    # Start with all non-deleted properties, prefetching relations
+    qs = Property.objects.filter(is_deleted=False).select_related(
+        'property_type', 'location', 'owner'
+    ).prefetch_related('amenities', 'media')
     
     # Text-based location filters (case-insensitive)
     if city:
@@ -245,14 +247,20 @@ def search_listings_service(
 ):
     """
     Advanced search for ACTIVE listings joining Property attributes.
-    Uses select_related to prevent N+1 query performance issues.
+    Uses select_related and prefetch_related to prevent N+1 query performance issues.
     """
     # Base query: only active listings for non-deleted properties
     qs = Listing.objects.filter(
         status=Listing.ListingStatus.ACTIVE,
         is_deleted=False,
         property__is_deleted=False
-    ).select_related('property', 'property__location', 'property__property_type')
+    ).select_related(
+        'agent',
+        'property',
+        'property__location',
+        'property__property_type',
+        'property__owner'
+    ).prefetch_related('property__amenities', 'property__media')
     
     # Listing specific filters
     if listing_type:
@@ -278,7 +286,7 @@ def search_listings_service(
 
 def create_property_type_service(user, name):
     if not user.is_staff and not user.is_superuser:
-        raise Exception("Access denied. Only admins can create property types, ya harami.")
+        raise Exception("Access denied. Only admins can create property types.")
     return PropertyType.objects.create(name=name)
 
 def create_amenity_service(user, name):

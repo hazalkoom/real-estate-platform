@@ -1,9 +1,8 @@
 import pytest
 from users.auth import generate_tokens
 from django.contrib.auth import get_user_model
-from properties.models import PropertyType
-from properties.models import Listing, Amenity
-from properties.services import create_property_service, create_listing_service
+from properties.models import Amenity, Listing, PropertyType
+from properties.services import create_listing_service, create_property_service
 
 User = get_user_model()
 
@@ -327,7 +326,7 @@ def test_add_property_media_idor_prevention(client):
     data = response.json()
     
     assert "errors" in data
-    assert "can't add pictures to someone else's property" in data["errors"][0]["message"]
+    assert "cannot add pictures to someone else's property" in data["errors"][0]["message"]
 
 @pytest.mark.django_db
 def test_update_property_media_success(client):
@@ -581,3 +580,22 @@ def test_admin_mutations_rejected_for_normal_users(client):
     
     assert "errors" in data
     assert "Only admins can create property types" in data["errors"][0]["message"]
+
+
+@pytest.mark.django_db
+def test_admin_mutations_rejected_for_unauthenticated_users(client):
+    mutation_pt = """
+        mutation {
+          createPropertyType(name: "Penthouse Unauth") { id name }
+        }
+    """
+    res_pt = client.post('/graphql/', {'query': mutation_pt}, content_type='application/json')
+    assert "Authentication required" in res_pt.json()["errors"][0]["message"]
+
+    mutation_am = """
+        mutation {
+          createAmenity(name: "Sauna Unauth") { id name }
+        }
+    """
+    res_am = client.post('/graphql/', {'query': mutation_am}, content_type='application/json')
+    assert "Authentication required" in res_am.json()["errors"][0]["message"]

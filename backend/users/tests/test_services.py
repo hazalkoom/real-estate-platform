@@ -122,3 +122,56 @@ def test_confirm_password_reset_service_invalid_token():
     
     with pytest.raises(Exception, match="invalid or expired"):
         confirm_password_reset(uidb64=uid, token="garbage-token", new_password="BrandNewPassword789!")
+
+
+@pytest.mark.django_db
+def test_authenticate_user_service_inactive_account(rf):
+    request = rf.post('/graphql/')
+    User.objects.create_user(email="inactive@example.com", password="SecurePassword123!", is_active=False)
+
+    with pytest.raises(Exception, match="This account has been deactivated"):
+        authenticate_user(request=request, email="inactive@example.com", password="SecurePassword123!")
+
+
+@pytest.mark.django_db
+def test_register_user_weak_password():
+    with pytest.raises(Exception, match="Password validation failed"):
+        register_user(
+            email="weak_pwd@example.com",
+            password="123",
+            first_name="Weak",
+            last_name="User"
+        )
+
+
+@pytest.mark.django_db
+def test_change_password_weak_new_password():
+    user = User.objects.create_user(email="weak_new_pwd@example.com", password="OldPassword123!")
+
+    with pytest.raises(Exception, match="Password validation failed"):
+        change_password(user, "OldPassword123!", "123")
+
+
+@pytest.mark.django_db
+def test_request_password_reset_non_existent_email():
+    mail.outbox.clear()
+    result = request_password_reset(email="nonexistent@example.com")
+    assert result is True
+    # Anti-enumeration: returns True but sends no email
+    assert len(mail.outbox) == 0
+
+
+@pytest.mark.django_db
+def test_confirm_password_reset_corrupted_uid():
+    with pytest.raises(Exception, match="Invalid reset link"):
+        confirm_password_reset(uidb64="!!!corrupted!!!", token="token123", new_password="BrandNewPassword789!")
+
+
+@pytest.mark.django_db
+def test_confirm_password_reset_weak_password():
+    user = User.objects.create_user(email="reset_weak@example.com", password="OldPassword123!")
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+
+    with pytest.raises(Exception, match="Password validation failed"):
+        confirm_password_reset(uidb64=uid, token=token, new_password="123")

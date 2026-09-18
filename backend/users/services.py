@@ -14,13 +14,14 @@ def authenticate_user(request, email, password):
     """
     Handles the business logic for verifying credentials and generating tokens.
     """
+    user_obj = User.objects.filter(email=email).first()
+    if user_obj and not user_obj.is_active and user_obj.check_password(password):
+        raise Exception("This account has been deactivated.")
+
     user = authenticate(request=request, email=email, password=password)
     
     if not user:
         raise Exception("Invalid credentials.")
-    
-    if not user.is_active:
-        raise Exception("This account has been deactivated.")
 
     access, refresh = generate_tokens(user)
     

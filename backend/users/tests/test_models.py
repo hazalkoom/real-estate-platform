@@ -34,3 +34,18 @@ def test_soft_delete(db):
     user.refresh_from_db()
     assert user.is_deleted is True
     assert user.deleted_at is not None
+
+
+@pytest.mark.django_db
+def test_user_str():
+    user = User(email="test_str@example.com")
+    assert str(user) == "test_str@example.com"
+
+
+@pytest.mark.django_db
+def test_create_superuser_invalid_flags():
+    with pytest.raises(ValueError, match="Superuser must have is_staff=True"):
+        User.objects.create_superuser(email="admin_fail1@example.com", password="pwd", is_staff=False)
+
+    with pytest.raises(ValueError, match="Superuser must have is_superuser=True"):
+        User.objects.create_superuser(email="admin_fail2@example.com", password="pwd", is_superuser=False)
