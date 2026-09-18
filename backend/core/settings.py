@@ -44,7 +44,7 @@ INSTALLED_APPS = [
     # Internal Modules (Uncomment as you build them)
     'users',
     'properties',
-    # 'interactions',
+    'interactions',
     # 'communication',
     # 'ai',
 ]
