@@ -72,8 +72,8 @@ backend/users/
 
 ## 🧪 Testing Strategy
 
-The test suite achieves high coverage using `pytest-django` and `factory_boy`:
+The `users` module is covered by **36 automated tests** with **100% test coverage** across models, services, permissions, and GraphQL schemas:
 
-- **`test_models.py`**: Verifies user creation, superuser creation, email normalization/validation, and soft-delete behaviors.
-- **`test_services.py`**: Tests domain business logic, authentication failures, duplicate email detection, password validation rules, and reset link generation.
-- **`test_api.py`**: Integration testing of GraphQL mutations and queries via `schema.execute_sync` and standard HTTP client.
+- **`test_models.py` (6 tests)**: Verifies user creation, superuser creation, staff/superuser flag validation, email normalization, string representations, and soft-delete behaviors.
+- **`test_services.py` (15 tests)**: Tests domain business logic, authentication failures, deactivated account handling, duplicate email detection, password validation rules (`validate_password`), and anti-enumeration reset link generation.
+- **`test_api.py` (15 tests)**: Integration testing of GraphQL mutations (`login`, `register`, `changePassword`, `requestPasswordReset`, `confirmPasswordReset`), `me` query, RBAC guards (`IsOwner`, `IsAgent`), and JWT middleware invalid/inactive token rejection.

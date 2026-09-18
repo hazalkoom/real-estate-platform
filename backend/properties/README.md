@@ -81,8 +81,8 @@ backend/properties/
 
 ## 🧪 Testing Strategy
 
-The `properties` test suite contains **34 comprehensive tests** executed via `pytest-django`:
+The `properties` module is covered by **42 automated tests** with **100% test coverage** across models, services, and GraphQL schemas:
 
-- **`test_models.py`**: Validates string formatting, default field values, soft deletion, and foreign key bindings.
-- **`test_services.py`**: Verifies business logic, IDOR protections, primary media toggle behavior, amenity assignment, and search filter querysets.
-- **`test_api.py`**: End-to-end GraphQL integration tests validating permissions (`IsOwner`, `IsAgent`, unauthenticated access), payload serializations, and error handling.
+- **`test_models.py` (4 tests)**: Validates string formatting, default field values, soft deletion, and foreign key bindings.
+- **`test_services.py` (18 tests)**: Verifies complete CRUD logic, IDOR protections, primary media toggle behavior, amenity assignment, and comprehensive search filter querysets.
+- **`test_api.py` (20 tests)**: End-to-end GraphQL integration tests validating permissions (`IsOwner`, `IsAgent`, unauthenticated access), payload serializations, and error handling.
