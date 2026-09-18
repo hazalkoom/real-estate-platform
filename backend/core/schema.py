@@ -1,6 +1,7 @@
 import strawberry
 from users.schema import Query as UsersQuery, Mutation as UsersMutation
 from properties.schema import Query as PropertiesQuery, Mutation as PropertiesMutation
+from strawberry_django.optimizer import DjangoOptimizerExtension
 
 @strawberry.type
 class Query(UsersQuery, PropertiesQuery):
@@ -12,4 +13,10 @@ class Query(UsersQuery, PropertiesQuery):
 class Mutation(UsersMutation, PropertiesMutation):
     pass
 
-schema = strawberry.Schema(query=Query, mutation=Mutation)
+schema = strawberry.Schema(
+    query=Query,
+    mutation=Mutation,
+    extensions=[
+        DjangoOptimizerExtension,
+    ]
+)
