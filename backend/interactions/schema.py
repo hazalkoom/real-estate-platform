@@ -2,7 +2,7 @@ import strawberry
 from asgiref.sync import sync_to_async
 import strawberry_django
 from datetime import datetime
-from .models import TourRequest
+from .models import TourRequest, Review, Favorite
 
 
 @strawberry_django.type(TourRequest)
@@ -11,6 +11,12 @@ class TourRequestNode:
     tour_date: datetime
     status: str
     message: str
+
+@strawberry_django.type(Review)
+class ReviewNode:
+    id: strawberry.ID
+    rating: int
+    comment: str
 
 @strawberry.type
 class Mutation:
@@ -43,6 +49,17 @@ class Mutation:
         
         res_async = sync_to_async(respond_to_tour_service, thread_sensitive=True)
         return await res_async(user=request.user, tour_id=tour_id, new_status=status)
+
+    @strawberry.mutation
+    async def create_review(self, info: strawberry.Info, agent_id: strawberry.ID, rating: int, comment: str = "") -> ReviewNode:
+        from .services import create_review_service
+        request = info.context.request
+        
+        if not request.user.is_authenticated:
+            raise Exception("Access denied. Log in to leave a review.")
+            
+        rev_async = sync_to_async(create_review_service, thread_sensitive=True)
+        return await rev_async(reviewer=request.user, agent_id=agent_id, rating=rating, comment=comment)
 
 @strawberry.type
 class Query:

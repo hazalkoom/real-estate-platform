@@ -2,7 +2,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from properties.models import PropertyType
 from properties.services import create_property_service, create_listing_service
-from interactions.services import toggle_favorite_service, request_tour_service, respond_to_tour_service
+from interactions.services import toggle_favorite_service, request_tour_service, respond_to_tour_service, create_review_service
 from interactions.models import Favorite, TourRequest
 from datetime import timedelta
 from django.utils import timezone
@@ -73,3 +73,25 @@ def test_respond_to_tour_service_idor():
     # Hacker tries to accept a tour for a listing they don't own
     with pytest.raises(Exception, match="do not manage this listing"):
         respond_to_tour_service(hacker, tour.id, TourRequest.TourStatus.ACCEPTED)
+
+@pytest.mark.django_db
+def test_create_review_service_success():
+    buyer = User.objects.create_user(email="rev_buyer_svc@example.com", password="Password123!")
+    agent = User.objects.create_user(email="rev_agent_svc@example.com", password="Password123!", is_agent=True)
+    
+    review = create_review_service(buyer, agent.id, 5, "Excellent agent!")
+    
+    assert review.id is not None
+    assert review.rating == 5
+
+@pytest.mark.django_db
+def test_create_review_service_duplicate_protection():
+    buyer = User.objects.create_user(email="rev_buyer_dup@example.com", password="Password123!")
+    agent = User.objects.create_user(email="rev_agent_dup@example.com", password="Password123!", is_agent=True)
+    
+    # First review succeeds
+    create_review_service(buyer, agent.id, 4, "Good")
+    
+    # Second review fails gracefully with our custom message
+    with pytest.raises(Exception, match="already reviewed this agent"):
+        create_review_service(buyer, agent.id, 1, "Actually, he was terrible.")

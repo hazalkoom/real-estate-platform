@@ -94,3 +94,26 @@ def test_respond_to_tour_idor_api(client):
     
     assert "errors" in data
     assert "do not manage this listing" in data["errors"][0]["message"]
+
+@pytest.mark.django_db
+def test_create_review_api(client):
+    buyer = User.objects.create_user(email="api_rev_buyer@example.com", password="Secure123!")
+    agent = User.objects.create_user(email="api_rev_agent@example.com", password="Secure123!", is_agent=True)
+    access, _ = generate_tokens(buyer)
+    
+    mutation = f"""
+        mutation {{
+          createReview(agentId: "{agent.id}", rating: 5, comment: "Superb") {{
+            id
+            rating
+            comment
+          }}
+        }}
+    """
+    
+    response = client.post('/graphql/', {'query': mutation}, content_type='application/json', HTTP_AUTHORIZATION=f"Bearer {access}")
+    data = response.json()
+    
+    assert "errors" not in data
+    assert data["data"]["createReview"]["rating"] == 5
+    assert data["data"]["createReview"]["comment"] == "Superb"
