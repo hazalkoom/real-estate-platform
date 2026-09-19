@@ -1,6 +1,10 @@
 from properties.models import Listing
-from .models import Favorite, TourRequest
+from .models import Favorite, TourRequest, Review
 from django.utils import timezone
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError
+
+User = get_user_model()
 
 def toggle_favorite_service(user, listing_id):
     """
@@ -64,3 +68,29 @@ def respond_to_tour_service(user, tour_id, new_status):
     tour.status = new_status
     tour.save()
     return tour
+
+def create_review_service(reviewer, agent_id, rating, comment=""):
+    """
+    Creates a review for an agent. Prevents duplicate reviews.
+    """
+    if not (1 <= rating <= 5):
+        raise Exception("Rating must be between 1 and 5, ya ghabi.")
+
+    try:
+        agent = User.objects.get(id=agent_id, is_agent=True)
+    except User.DoesNotExist:
+        raise Exception("Target user is not an agent or does not exist.")
+
+    if reviewer.id == agent.id:
+        raise Exception("You cannot review yourself, ya nargesi (يا نرجسي).")
+
+    try:
+        review = Review.objects.create(
+            reviewer=reviewer,
+            agent=agent,
+            rating=rating,
+            comment=comment
+        )
+        return review
+    except IntegrityError:
+        raise Exception("You have already reviewed this agent. Stop spamming.")
